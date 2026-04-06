@@ -1,18 +1,23 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, Alert } from "react-native";
 import { router } from "expo-router";
-import { loginUserApi } from "../../services/authService";
+import { loginUserApi } from "../../src/services/authService";
+import { useAuthStore } from "../../src/stores/authStore";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const setAuth = useAuthStore((state) => state.setAuth);
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert("Validation", "Please enter email and password");
       return;
     }
+
+    if (loading) return;
 
     try {
       setLoading(true);
@@ -23,8 +28,11 @@ export default function LoginScreen() {
       });
 
       if (response.success) {
-        Alert.alert("Success", "Login successful");
-        router.replace("/(tabs)");
+        setAuth({
+        user: response.user,
+        token: null
+      });
+        router.replace("/(protected)/home");
       } else {
         Alert.alert("Login failed", response.message || "Invalid credentials");
       }
@@ -34,8 +42,6 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
-
-  
 
   return (
     <View className="flex-1 justify-center bg-white px-6">
