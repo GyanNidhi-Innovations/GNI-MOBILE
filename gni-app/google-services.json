@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "875163946900",
+    "project_id": "gyannidhi-5329c",
+    "storage_bucket": "gyannidhi-5329c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:875163946900:android:13e9d01ce3a9bad8108981",
+        "android_client_info": {
+          "package_name": "com.anonymous.gniapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfld9QPE2WHW3GEXUbMDh34ZFczttUI6Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

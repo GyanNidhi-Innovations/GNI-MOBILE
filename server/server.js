@@ -5,8 +5,12 @@ import cors from "cors";
 import mongoose from "mongoose";
 import registerRoutes from "./src/routes/registerRoutes.js";
 import eventRoutes from "./src/routes/eventRoutes.js";
+import notificationRoutes from "./src/routes/notificationRoutes.js";
+import { initFirebaseAdmin } from "./src/config/firebaseAdmin.js";
+
 
 dotenv.config();
+initFirebaseAdmin();
 
 const app = express();
 
@@ -18,6 +22,7 @@ mongoose.set("bufferCommands", false);
 
 app.use("/api", registerRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => {
   res.send("🚀 Mobile backend running");
