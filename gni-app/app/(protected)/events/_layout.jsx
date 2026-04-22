@@ -2,7 +2,18 @@ import { Stack } from "expo-router";
 
 export default function EventsLayout() {
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerShadowVisible: false,
+        headerStyle: {
+          backgroundColor: "#f9fafb",
+        },
+        headerTitleStyle: {
+          fontWeight: "700",
+          fontSize: 18,
+        },
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{

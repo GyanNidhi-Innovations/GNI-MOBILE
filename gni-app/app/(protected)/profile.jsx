@@ -1,14 +1,91 @@
-import { View, Text, ScrollView, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/stores/authStore";
-import { eventsData } from "@/data/eventsData";
+import { apiClient } from "@/services/apiClient";
 
 export default function ProfileScreen() {
-  const user = useAuthStore((state) => state.user);
+  const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const setAuth = useAuthStore((state) => state.setAuth);
   const router = useRouter();
-  const registeredEvents = useAuthStore((state) => state.registeredEvents);
+
+  const [user, setUser] = useState(authUser);
+  const [registeredEvents, setRegisteredEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProfileAndEvents = useCallback(async () => {
+    try {
+      if (!authUser?.id && !authUser?._id) {
+        setLoading(false);
+        return;
+      }
+
+      const userId = authUser?.id || authUser?._id;
+
+      setLoading(true);
+
+      const [profileRes, eventsRes] = await Promise.all([
+        apiClient(`/profile/${userId}`),
+        apiClient(`/events/registered/${userId}`),
+      ]);
+
+      const fetchedUser = profileRes?.user || null;
+      const fetchedEvents = eventsRes?.events || [];
+
+      setUser(fetchedUser);
+      setRegisteredEvents(fetchedEvents);
+
+      if (fetchedUser) {
+        setAuth({
+          user: {
+            ...fetchedUser,
+            id: fetchedUser.id || fetchedUser._id,
+          },
+          token: useAuthStore.getState().token,
+        });
+      }
+    } catch (error) {
+      console.log("fetchProfileAndEvents error:", error);
+      Alert.alert("Error", error?.message || "Failed to load profile");
+    } finally {
+      setLoading(false);
+    }
+  }, [authUser?.id, authUser?._id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfileAndEvents();
+    }, [fetchProfileAndEvents])
+  );
+
+  const handleOpenEvent = (event) => {
+    if (!event?._id) return;
+
+    router.push({
+      pathname: "/(protected)/events/[id]",
+      params: {
+        id: event._id,
+        source: "profile",
+      },
+    });
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="small" color="#2563eb" />
+      </View>
+    );
+  }
 
   if (!user) {
     return (
@@ -30,11 +107,12 @@ export default function ProfileScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-100">
       <View className="p-5">
-        {/* Header Card */}
         <View className="bg-blue-900 rounded-3xl p-6 mb-5">
           <View className="flex-row items-center">
             <View className="h-20 w-20 rounded-full bg-blue-200 items-center justify-center mr-4">
-              <Text className="text-2xl font-bold text-blue-900">{initials}</Text>
+              <Text className="text-2xl font-bold text-blue-900">
+                {initials}
+              </Text>
             </View>
 
             <View className="flex-1">
@@ -48,69 +126,22 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Profile Details Card */}
         <View className="bg-white rounded-2xl p-5 mb-5">
           <Text className="text-lg font-bold text-blue-900 mb-4">
             Personal Details
           </Text>
 
-          <ProfileItem
-            icon="person-outline"
-            label="Name"
-            value={user.name}
-          />
+          <ProfileItem icon="person-outline" label="Name" value={user.name} />
           <Divider />
-
-          <ProfileItem
-            icon="mail-outline"
-            label="Email"
-            value={user.email}
-          />
+          <ProfileItem icon="mail-outline" label="Email" value={user.email} />
           <Divider />
-
-          <ProfileItem
-            icon="call-outline"
-            label="Phone"
-            value={user.phone}
-          />
+          <ProfileItem icon="call-outline" label="Phone" value={user.phone} />
           <Divider />
-
-          <ProfileItem
-            icon="school-outline"
-            label="College"
-            value={user.college}
-          />
+          <ProfileItem icon="school-outline" label="College" value={user.college} />
+          <Divider />
+          <ProfileItem icon="book-outline" label="Branch" value={user.branch} />
         </View>
 
-        <View className="bg-white rounded-2xl p-5 mb-5">
-  <Text className="text-lg font-bold text-blue-900 mb-4">
-    Registered Events
-  </Text>
-
-  {registeredEvents.length === 0 ? (
-    <Text className="text-gray-500">
-      No registered events yet
-    </Text>
-  ) : (
-    registeredEvents.map((eventId) => {
-      const event = eventsData[eventId];
-
-      return (
-        <View
-          key={eventId}
-          className="flex-row items-center mb-3"
-        >
-          <Text className="text-blue-600 mr-2">🎯</Text>
-          <Text className="text-black font-medium">
-            {event?.title || "Unknown Event"}
-          </Text>
-        </View>
-      );
-    })
-  )}
-</View>
-
-        {/* Quick Info Card */}
         <View className="bg-blue-50 rounded-2xl p-5 mb-5 border border-blue-100">
           <Text className="text-lg font-bold text-blue-900 mb-4">
             Account Overview
@@ -118,11 +149,60 @@ export default function ProfileScreen() {
 
           <View className="flex-row justify-between">
             <InfoBox title="Status" value="Active" />
-            <InfoBox title="Role" value="Student" />
+            <InfoBox title="Role" value={user.type || "User"} />
           </View>
         </View>
 
-        {/* Logout Button */}
+        <View className="bg-white rounded-2xl p-5 mb-5">
+          <Text className="text-lg font-bold text-blue-900 mb-4">
+            My Registered Events
+          </Text>
+
+          {registeredEvents.length === 0 ? (
+            <Text className="text-gray-500">No registered events yet</Text>
+          ) : (
+            registeredEvents.map((event, index) => (
+              <View key={event._id}>
+                <Pressable
+                  onPress={() => handleOpenEvent(event)}
+                  className="flex-row items-start"
+                >
+                  <View className="h-11 w-11 rounded-full bg-blue-100 items-center justify-center mr-3">
+                    <Ionicons
+                      name="calendar-outline"
+                      size={20}
+                      color="#1d4ed8"
+                    />
+                  </View>
+
+                  <View className="flex-1">
+                    <Text className="text-base font-semibold text-black">
+                      {event.title || "Untitled Event"}
+                    </Text>
+
+                    <Text className="text-sm text-gray-500 mt-1">
+                      📅{" "}
+                      {event.date
+                        ? new Date(event.date).toLocaleDateString()
+                        : "-"}
+                    </Text>
+
+                    <Text className="text-sm text-gray-500 mt-1">
+                      📍 {event.location || "-"}
+                    </Text>
+
+                    <Text className="text-blue-600 text-xs mt-2 font-medium">
+                      Tap to open
+                    </Text>
+                  </View>
+                </Pressable>
+
+                {index !== registeredEvents.length - 1 && <Divider />}
+              </View>
+            ))
+          )}
+        </View>
+
         <Pressable
           onPress={() => {
             logout();

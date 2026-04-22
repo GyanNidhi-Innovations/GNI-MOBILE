@@ -32,6 +32,7 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
@@ -43,3 +44,7 @@ app-example
 /android
 
 .tsbuildinfo
+
+*.json
+firebase-service.json
+google-services.json

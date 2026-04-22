@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import registerRoutes from "./src/routes/registerRoutes.js";
 import eventRoutes from "./src/routes/eventRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
+import profileRoutes from "./src/routes/profileRoutes.js";
 import { initFirebaseAdmin } from "./src/config/firebaseAdmin.js";
 
 
@@ -23,6 +24,7 @@ mongoose.set("bufferCommands", false);
 app.use("/api", registerRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/profile", profileRoutes);
 
 app.get("/", (req, res) => {
   res.send("🚀 Mobile backend running");

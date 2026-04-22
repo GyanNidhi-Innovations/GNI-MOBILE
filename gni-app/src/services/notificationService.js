@@ -60,3 +60,7 @@ export async function registerForFcmNotifications(userId) {
     throw error;
   }
 }
+
+export async function getUnreadNotificationCount(userId) {
+  return await apiClient(`/notifications/unread/${userId}`);
+}

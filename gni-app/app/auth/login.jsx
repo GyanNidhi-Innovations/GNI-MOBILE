@@ -8,37 +8,63 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const handleLogin = async () => {
+    console.log("Login button clicked");
+
     if (!email.trim() || !password.trim()) {
+      console.log("Validation failed: email or password missing");
       Alert.alert("Validation", "Please enter email and password");
       return;
     }
 
-    if (loading) return;
+    if (loading) {
+      console.log("Login skipped because loading is true");
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const response = await loginUserApi({
+      const payload = {
         email: email.trim(),
         password: password.trim(),
-      });
+      };
 
-      if (response.success) {
+      console.log("Sending login payload:", payload);
+
+      const response = await loginUserApi(payload);
+
+      console.log("Login API response:", response);
+
+      if (response?.success) {
         setAuth({
-        user: response.user,
-        token: null
-      });
+          user: response.user,
+          token: response.token || null,
+        });
+
+        console.log("Login success, navigating to home");
         router.replace("/(protected)/home");
       } else {
-        Alert.alert("Login failed", response.message || "Invalid credentials");
+        console.log("Login failed response:", response);
+        Alert.alert("Login failed", response?.message || "Invalid credentials");
       }
     } catch (error) {
-      Alert.alert("Error", error.message || "Something went wrong");
+      console.log("Login error full object:", error);
+      console.log("Login error message:", error?.message);
+      console.log("Login error response:", error?.response?.data);
+
+      Alert.alert(
+        "Error",
+        error?.response?.data?.message ||
+          error?.message ||
+          "Something went wrong"
+      );
     } finally {
+      console.log("Login request finished");
       setLoading(false);
     }
   };
@@ -62,13 +88,20 @@ export default function LoginScreen() {
         className="mb-4 rounded-xl border border-gray-300 px-4 py-3"
       />
 
-      <TextInput
-        placeholder="Enter password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        className="mb-5 rounded-xl border border-gray-300 px-4 py-3"
-      />
+      <View className="mb-5 flex-row items-center rounded-xl border border-gray-300 px-4">
+        <TextInput
+          placeholder="Enter password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          className="flex-1 py-3"
+        />
+        <Pressable onPress={() => setShowPassword(!showPassword)}>
+          <Text className="font-semibold text-blue-600">
+            {showPassword ? "Hide" : "Show"}
+          </Text>
+        </Pressable>
+      </View>
 
       <Pressable
         onPress={handleLogin}
