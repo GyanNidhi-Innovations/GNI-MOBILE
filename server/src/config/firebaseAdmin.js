@@ -3,7 +3,9 @@ import admin from "firebase-admin";
 let firebaseApp;
 
 export function initFirebaseAdmin() {
-  if (firebaseApp) return firebaseApp;
+  if (firebaseApp || admin.apps.length) {
+    return firebaseApp || admin.app();
+  }
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -23,6 +25,7 @@ export function initFirebaseAdmin() {
     }),
   });
 
+  console.log("✅ Firebase initialized");
   return firebaseApp;
 }
 

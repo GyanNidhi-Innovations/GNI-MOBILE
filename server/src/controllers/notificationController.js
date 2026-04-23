@@ -148,20 +148,23 @@ export async function sendToUser(req, res) {
     });
 
     // deactivate invalid tokens
-    response.responses.forEach(async (r, index) => {
-      if (!r.success) {
-        const code = r.error?.code || "";
-        if (
-          code.includes("registration-token-not-registered") ||
-          code.includes("invalid-argument")
-        ) {
-          await NotificationToken.findOneAndUpdate(
-            { token: tokenValues[index] },
-            { isActive: false }
-          );
-        }
-      }
-    });
+    for (let index = 0; index < response.responses.length; index++) {
+  const r = response.responses[index];
+
+  if (!r.success) {
+    const code = r.error?.code || "";
+
+    if (
+      code.includes("registration-token-not-registered") ||
+      code.includes("invalid-argument")
+    ) {
+      await NotificationToken.findOneAndUpdate(
+        { token: tokenValues[index] },
+        { isActive: false }
+      );
+    }
+  }
+}
 
     return res.json({
       success: true,
