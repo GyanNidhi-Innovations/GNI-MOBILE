@@ -1,23 +1,26 @@
 import admin from "firebase-admin";
-import fs from "fs";
 
 let firebaseApp;
 
 export function initFirebaseAdmin() {
   if (firebaseApp) return firebaseApp;
 
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
-  if (!serviceAccountPath) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_PATH is missing in .env");
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      "Missing Firebase env vars: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY"
+    );
   }
 
-  const serviceAccount = JSON.parse(
-    fs.readFileSync(serviceAccountPath, "utf8")
-  );
-
   firebaseApp = admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
   });
 
   return firebaseApp;

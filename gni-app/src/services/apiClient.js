@@ -1,5 +1,8 @@
-const BASE_URL = "http://10.0.2.2:5000/api";
-// const BASE_URL = "http://192.168.1.47:5000/api";
+import Constants from "expo-constants";
+
+const BASE_URL =
+  Constants.expoConfig?.extra?.apiBaseUrl ||
+  "https://gni-mobile.onrender.com/api";
 
 export const apiClient = async (endpoint, options = {}) => {
   const isFormData = options.body instanceof FormData;
