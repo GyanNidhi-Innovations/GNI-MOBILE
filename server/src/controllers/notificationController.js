@@ -127,10 +127,23 @@ export async function sendToUser(req, res) {
       ),
       android: {
         priority: "high",
+        notification: {
+          channelId: "default",
+          sound: "default",
+        },
       },
     };
 
     const response = await admin.messaging().sendEachForMulticast(message);
+
+    const failures = response.responses.map((r, index) => ({
+      tokenLast10: tokenValues[index]?.slice(-10),
+      success: r.success,
+      errorCode: r.error?.code || null,
+      errorMessage: r.error?.message || null,
+    }));
+
+    const failedOnly = failures.filter((f) => !f.success);
 
     await Notification.create({
       userId,
@@ -139,32 +152,40 @@ export async function sendToUser(req, res) {
       type: type || "system",
       data: data || {},
       deliveryStatus:
-  response.failureCount === 0
-    ? "sent"
-    : response.successCount > 0
-    ? "partial"
-    : "failed",
+        response.failureCount === 0
+          ? "sent"
+          : response.successCount > 0
+          ? "partial"
+          : "failed",
+      failureReason:
+        failedOnly.length > 0
+          ? failedOnly.map((f) => f.errorCode).join(", ")
+          : "",
       sentAt: new Date(),
     });
 
-    // deactivate invalid tokens
     for (let index = 0; index < response.responses.length; index++) {
-  const r = response.responses[index];
+      const r = response.responses[index];
 
-  if (!r.success) {
-    const code = r.error?.code || "";
+      if (!r.success) {
+        const code = r.error?.code || "";
 
-    if (
-      code.includes("registration-token-not-registered") ||
-      code.includes("invalid-argument")
-    ) {
-      await NotificationToken.findOneAndUpdate(
-        { token: tokenValues[index] },
-        { isActive: false }
-      );
+        if (
+          code.includes("registration-token-not-registered") ||
+          code.includes("invalid-registration-token") ||
+          code.includes("invalid-argument")
+        ) {
+          await NotificationToken.findOneAndUpdate(
+            { token: tokenValues[index] },
+            {
+              isActive: false,
+              failureReason: code,
+              lastFailedAt: new Date(),
+            }
+          );
+        }
+      }
     }
-  }
-}
 
     return res.json({
       success: true,
@@ -172,12 +193,16 @@ export async function sendToUser(req, res) {
       result: {
         successCount: response.successCount,
         failureCount: response.failureCount,
+        failures: failedOnly,
       },
     });
   } catch (error) {
+    console.error("sendToUser error:", error);
+
     return res.status(500).json({
       success: false,
       message: error.message,
+      code: error.code || null,
     });
   }
 }
