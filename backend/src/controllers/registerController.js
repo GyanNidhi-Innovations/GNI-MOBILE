@@ -17,6 +17,7 @@ export const loginRegistrationUser = async (req, res) => {
       });
     }
 
+    
     console.log("mongoose readyState:", mongoose.connection.readyState);
     console.log("mongoose connection name:", mongoose.connection.name);
     console.log("mongoose model names:", mongoose.modelNames());
