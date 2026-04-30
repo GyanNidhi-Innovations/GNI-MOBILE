@@ -41,3 +41,4 @@ server/.env.*
 firebase-service.json
 google-services.json
 
+server/src/config/firebase-service.json
