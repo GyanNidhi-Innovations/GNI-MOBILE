@@ -1,38 +1,117 @@
-name: Android Build (EAS)
+name: Deploy GNI App Backend
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ "main" ]
     paths:
-      - "gni-app/**"
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
 
 jobs:
-  build-android:
+  deploy:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: gni-app
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Deploy Backend via SSH
+        uses: appleboy/ssh-action@v1.2.2
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: gni-app/package-lock.json
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOYER_SSH_KEY }}
+          script: |
+            # ============================================
+            # SETUP SSH KEY FOR GIT OPERATIONS
+            # ============================================
+            echo "🔑 Setting up SSH key for backend repository..."
+            mkdir -p ~/.ssh
+            cat > ~/.ssh/id_ed25519 << 'EOF'
+            ${{ secrets.REPO_SSH_KEY }}
+            EOF
+            chmod 600 ~/.ssh/id_ed25519
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Install dependencies
-        run: npm install
+            # ============================================
+            # UPDATE EXISTING BACKEND PROJECT
+            # ============================================
+            echo "📁 Navigating to backend project directory..."
+            cd /home/deploy/gni-app-backend
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
+            echo "🔄 Updating to latest backend code..."
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git fetch origin
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git reset --hard origin/main
+            git clean -fd
 
-      - name: Build APK with EAS
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build -p android --profile preview --non-interactive
+            # ============================================
+            # COPY ENVIRONMENT FILE
+            # ============================================
+            echo "📁 Copying backend environment file..."
+            [ -f "/etc/gni-app-backend.env" ] && cp /etc/gni-app-backend.env backend/.env || echo "⚠️ Backend env file not found"
+
+            # ============================================
+            # DEPLOY BACKEND CONTAINER
+            # ============================================
+            echo "🏗️ Building gni-app-backend container..."
+
+            cd backend
+
+            if docker-compose -p gni-app-backend build --no-cache; then
+              echo "✅ Build successful! Starting backend deployment..."
+
+              echo "🔄 Attempting quick backend refresh..."
+              if timeout 30s docker-compose -p gni-app-backend up -d --force-recreate; then
+                echo "🎉 Quick backend deployment successful!"
+              else
+                echo "⚠️ Quick deployment failed. Using safe method..."
+
+                docker-compose -p gni-app-backend stop || true
+                docker-compose -p gni-app-backend up -d
+                echo "✅ Safe backend deployment completed!"
+              fi
+            else
+              echo "❌ Backend build failed! Old version remains running."
+              exit 1
+            fi
+
+            # ============================================
+            # HEALTH CHECKS
+            # ============================================
+            echo "🔍 Verifying backend container health..."
+            sleep 15
+
+            if ! docker ps --filter "name=gni-app-backend" --filter "status=running" --format "{{.Names}}" | grep -q gni-app-backend; then
+              echo "❌ Backend container health check failed"
+              docker-compose -p gni-app-backend down && docker-compose -p gni-app-backend up -d
+              exit 1
+            fi
+
+            # ============================================
+            # CONNECTIVITY TEST
+            # ============================================
+            echo "🌐 Testing backend connectivity..."
+
+            if curl -s --retry 3 --retry-delay 5 --max-time 10 http://localhost:5010/ > /dev/null; then
+              echo "✅ Backend root endpoint is responding"
+            elif curl -s --retry 3 --retry-delay 5 --max-time 10 http://localhost:5010/api > /dev/null; then
+              echo "✅ Backend API endpoint is responding"
+            elif curl -s --retry 3 --retry-delay 5 --max-time 10 http://localhost:5010/api/health > /dev/null; then
+              echo "✅ Backend health endpoint is responding"
+            else
+              echo "❌ Backend connectivity test failed"
+              docker-compose -p gni-app-backend down && docker-compose -p gni-app-backend up -d
+              exit 1
+            fi
+
+            # ============================================
+            # CLEANUP AND FINAL STATUS
+            # ============================================
+            echo "🧹 Cleaning up unused Docker images..."
+            docker image prune -f
+
+            echo "📦 Current backend container:"
+            docker ps --filter "name=gni-app-backend" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+            echo "✅ 🚀 GNI App Backend deployment completed successfully!"

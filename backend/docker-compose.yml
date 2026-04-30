@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: .
+    container_name: gni-app-backend
+    restart: always
+
+    ports:
+      - "5010:5000"
+
+    env_file:
+      - /etc/gni-app-backend.env
+
+    volumes:
+      # Optional: if your backend stores files (uploads, reports, etc.)
+      - /srv/gni-app/uploads:/app/uploads
+
+    networks:
+      - gni-network
+
+networks:
+  gni-network:
+    driver: bridge
