@@ -37,7 +37,7 @@ backend/.env.*
 .env.local
 .env.*.local
 
-*.json
+
 firebase-service.json
 google-services.json
 
