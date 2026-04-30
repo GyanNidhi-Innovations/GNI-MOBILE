@@ -45,7 +45,7 @@ app-example
 
 .tsbuildinfo
 
-*.json
+
 firebase-service.json
 google-services.json
 
