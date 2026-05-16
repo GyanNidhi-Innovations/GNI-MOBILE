@@ -177,6 +177,17 @@ export default function HomeScreen() {
             Check your latest updates
           </Text>
         </Pressable>
+        <Pressable
+    onPress={() => router.push("/premises")}
+    className="bg-[#001C80] rounded-2xl p-4 border border-blue-900"
+  >
+    <Text className="text-lg font-semibold text-white">
+      📷 Premises Check
+    </Text>
+    <Text className="text-sm text-blue-100 mt-1">
+      Validate HireAI or exam premises
+    </Text>
+  </Pressable>
       </View>
 
       <View className="bg-white rounded-2xl p-5 mb-5">

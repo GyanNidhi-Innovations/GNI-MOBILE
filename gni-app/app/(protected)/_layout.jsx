@@ -65,7 +65,6 @@ export default function ProtectedLayout() {
   }, [userId, router]);
 
   return (
-    
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "#2563eb",
@@ -81,6 +80,13 @@ export default function ProtectedLayout() {
         tabBarStyle: {
           backgroundColor: "#ffffff",
           borderTopWidth: 0,
+          height: 64,
+          paddingTop: 6,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "500",
         },
       }}
     >
@@ -133,6 +139,38 @@ export default function ProtectedLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="premises/index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="premises/hireai"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="premises/exam"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="premises/camera-validation"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
     </Tabs>
