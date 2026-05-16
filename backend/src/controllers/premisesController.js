@@ -1,6 +1,7 @@
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { validatePremisesImage } from "../services/premisesOpenAIService.js";
+import ExamPremisesValidation from "../models/ExamPremisesValidation.js";
 
 
 export const premisesHealth = (req, res) => {
@@ -176,6 +177,27 @@ export const validateExamPremises = async (req, res) => {
     };
 
     examValidationStore.set(attempt, record);
+
+    await ExamPremisesValidation.findOneAndUpdate(
+  { attempt },
+  {
+    $set: {
+      attempt,
+      room,
+      validated: Boolean(verdict.ok),
+      confidence: verdict.confidence || 0,
+      checks: verdict.checks || {},
+      notes: verdict.notes || "",
+      fail_reason: verdict.fail_reason || "",
+      verdict,
+      validatedAt: new Date(),
+    },
+  },
+  {
+    upsert: true,
+    new: true,
+  }
+);
 
     return res.json({
       ok: true,
