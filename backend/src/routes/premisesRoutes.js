@@ -8,6 +8,7 @@ import {
   getHireAIValidationStatus,
   validateExamPremises,
   getExamValidationStatus,
+  bootstrapExamPremises,
 } from "../controllers/premisesController.js";
 
 const router = express.Router();
@@ -27,5 +28,6 @@ router.post(
   validateExamPremises
 );
 router.get("/exam/status", getExamValidationStatus);
+router.get("/exam/bootstrap", bootstrapExamPremises);
 
 export default router;

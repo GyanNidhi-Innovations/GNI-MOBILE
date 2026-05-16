@@ -2,6 +2,7 @@ import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { validatePremisesImage } from "../services/premisesOpenAIService.js";
 
+
 export const premisesHealth = (req, res) => {
   res.json({
     ok: true,
@@ -9,6 +10,7 @@ export const premisesHealth = (req, res) => {
   });
 };
 const examValidationStore = new Map();
+const examPremisesSessions = new Map();
 
 export const createPremisesSession = (req, res) => {
   const sessionId = uuidv4();
@@ -223,4 +225,45 @@ export const getExamValidationStatus = (req, res) => {
     fail_reason: record.fail_reason,
     updated_at: record.updated_at,
   });
+};
+
+
+export const bootstrapExamPremises = async (req, res) => {
+  try {
+    const attempt = String(req.query.attempt || "").trim();
+
+    if (!attempt) {
+      return res.status(400).json({
+        ok: false,
+        detail: "attempt is required",
+      });
+    }
+
+    const existing = examPremisesSessions.get(attempt);
+
+    if (existing) {
+      return res.json(existing);
+    }
+
+    const sessionId = uuidv4();
+    const short = sessionId.split("-")[0];
+
+    const payload = {
+      ok: true,
+      attempt,
+      session_id: sessionId,
+      room: `premises-${short}-prem`,
+      room_prem: `premises-${short}-prem`,
+      room_cam: `premises-${short}-cam`,
+    };
+
+    examPremisesSessions.set(attempt, payload);
+
+    return res.json(payload);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      detail: error.message,
+    });
+  }
 };
