@@ -12,6 +12,7 @@ import {
   getHireAIValidationStatus,
   validateExamPremises,
   getExamValidationStatus,
+  getExamLiveStatus,
   bootstrapExamPremises,
   uploadExamPremisesSegment,
   startExamPremisesMerge,
@@ -47,5 +48,6 @@ router.post(
 );
 
 router.post("/exam/start-merge", startExamPremisesMerge);
+router.get("/exam/live-status", getExamLiveStatus);
 
 export default router;

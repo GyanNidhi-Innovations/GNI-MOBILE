@@ -3,6 +3,7 @@ import FormData from "form-data";
 import { v4 as uuidv4 } from "uuid";
 import { validatePremisesImage } from "../services/premisesOpenAIService.js";
 import ExamPremisesValidation from "../models/ExamPremisesValidation.js";
+import CompanyStudentUpload from "../models/CompanyStudentUpload.js";
 
 
 export const premisesHealth = (req, res) => {
@@ -367,6 +368,74 @@ export const startExamPremisesMerge = async (req, res) => {
 
     return res.status(response.status).json(response.data);
   } catch (error) {
+    return res.status(error.response?.status || 502).json({
+      ok: false,
+      detail: error.response?.data || error.message,
+    });
+  }
+};
+
+export const getExamLiveStatus = async (req, res) => {
+  try {
+    const attempt = String(req.query.attempt || "").trim();
+
+    if (!attempt) {
+      return res.status(400).json({
+        ok: false,
+        detail: "attempt is required",
+      });
+    }
+
+    const premisesBaseUrl =
+      process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in/premises";
+
+    const metaResponse = await axios.get(
+      `${premisesBaseUrl}/api/attempt-meta`,
+      {
+        params: { attempt },
+        timeout: 15000,
+      }
+    );
+
+    const examId = metaResponse?.data?.examId;
+    const email = metaResponse?.data?.email;
+
+    if (!examId || !email) {
+      return res.status(404).json({
+        ok: false,
+        detail: "examId or email unavailable for attempt",
+      });
+    }
+
+    const student = await CompanyStudentUpload.findOne({
+      examId,
+      emailNormalized: String(email).toLowerCase().trim(),
+    }).select("examStatus premisesJobId premisesMergeStatus examSubmittedAt");
+
+    if (!student) {
+      return res.status(404).json({
+        ok: false,
+        detail: "student exam record not found",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      attempt,
+      examId,
+      email,
+      examStatus: student.examStatus,
+      submitted: student.examStatus === "SUBMITTED",
+      premisesJobId: student.premisesJobId,
+      premisesMergeStatus: student.premisesMergeStatus,
+      examSubmittedAt: student.examSubmittedAt,
+    });
+  } catch (error) {
+    console.error(
+      "Get exam live status error:",
+      error.response?.data || error.message
+    );
+
     return res.status(error.response?.status || 502).json({
       ok: false,
       detail: error.response?.data || error.message,
