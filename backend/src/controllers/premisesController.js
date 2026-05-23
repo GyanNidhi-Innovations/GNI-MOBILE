@@ -340,6 +340,7 @@ export const uploadExamPremisesSegment = async (req, res) => {
 };
 
 
+
 export const startExamPremisesMerge = async (req, res) => {
   try {
     const premisesBaseUrl =
