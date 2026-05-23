@@ -9,6 +9,8 @@ import {
   validateExamPremises,
   getExamValidationStatus,
   bootstrapExamPremises,
+  uploadExamPremisesSegment,
+  startExamPremisesMerge,
 } from "../controllers/premisesController.js";
 
 const router = express.Router();
@@ -29,5 +31,13 @@ router.post(
 );
 router.get("/exam/status", getExamValidationStatus);
 router.get("/exam/bootstrap", bootstrapExamPremises);
+
+router.post(
+  "/exam/upload-segment",
+  premisesImageUpload.single("file"),
+  uploadExamPremisesSegment
+);
+
+router.post("/exam/start-merge", startExamPremisesMerge);
 
 export default router;

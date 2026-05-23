@@ -1,4 +1,5 @@
 import axios from "axios";
+import FormData from "form-data";
 import { v4 as uuidv4 } from "uuid";
 import { validatePremisesImage } from "../services/premisesOpenAIService.js";
 import ExamPremisesValidation from "../models/ExamPremisesValidation.js";
@@ -286,6 +287,79 @@ export const bootstrapExamPremises = async (req, res) => {
     return res.status(500).json({
       ok: false,
       detail: error.message,
+    });
+  }
+};
+
+export const uploadExamPremisesSegment = async (req, res) => {
+  try {
+    if (!req.file?.buffer) {
+      return res.status(400).json({
+        ok: false,
+        detail: "file is required",
+      });
+    }
+
+    const meta = req.body.meta;
+
+    if (!meta) {
+      return res.status(400).json({
+        ok: false,
+        detail: "meta is required",
+      });
+    }
+
+    const premisesBaseUrl =
+      process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in";
+
+    const formData = new FormData();
+
+    formData.append("meta", meta);
+
+    formData.append("file", new Blob([req.file.buffer]), {
+      filename: req.file.originalname || "segment.mp4",
+      contentType: req.file.mimetype || "video/mp4",
+    });
+
+    const response = await axios.post(
+      `${premisesBaseUrl}/api/exam/upload-segment`,
+      formData,
+      {
+        headers: formData.getHeaders ? formData.getHeaders() : {},
+        timeout: 60000,
+      }
+    );
+
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    return res.status(error.response?.status || 502).json({
+      ok: false,
+      detail: error.response?.data || error.message,
+    });
+  }
+};
+
+export const startExamPremisesMerge = async (req, res) => {
+  try {
+    const premisesBaseUrl =
+      process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in";
+
+    const response = await axios.post(
+      `${premisesBaseUrl}/api/exam/start-merge`,
+      req.body,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: 60000,
+      }
+    );
+
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    return res.status(error.response?.status || 502).json({
+      ok: false,
+      detail: error.response?.data || error.message,
     });
   }
 };
