@@ -390,7 +390,7 @@ export const getExamLiveStatus = async (req, res) => {
       process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in/premises";
 
     const metaResponse = await axios.get(
-      `${premisesBaseUrl}/attempt-meta`,
+      `${premisesBaseUrl}/student-exam/attempt-meta`,
       {
         params: { attempt },
         timeout: 15000,
