@@ -5,7 +5,7 @@ const storage = multer.memoryStorage();
 export const premisesImageUpload = multer({
   storage,
   limits: {
-    fileSize: 8 * 1024 * 1024,
+    fileSize: 500 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
@@ -21,7 +21,7 @@ export const premisesImageUpload = multer({
 export const premisesVideoUpload = multer({
   storage,
   limits: {
-    fileSize: 250 * 1024 * 1024,
+    fileSize: 500 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
     if (
