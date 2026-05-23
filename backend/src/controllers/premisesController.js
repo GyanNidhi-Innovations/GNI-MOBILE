@@ -374,61 +374,60 @@ export const startExamPremisesMerge = async (req, res) => {
     });
   }
 };
-
 export const getExamLiveStatus = async (req, res) => {
   try {
     const attempt = String(req.query.attempt || "").trim();
+    const examId = String(req.query.examId || "").trim();
+    const email = String(req.query.email || "").trim().toLowerCase();
 
-    if (!attempt) {
+    if (!attempt && (!examId || !email)) {
       return res.status(400).json({
         ok: false,
-        detail: "attempt is required",
+        detail: "Either attempt OR examId and email are required",
       });
     }
 
-    const premisesBaseUrl =
-      process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in/premises";
+    const examBaseUrl =
+      process.env.EXAM_BACKEND_URL || "http://localhost:5001/api";
 
-    const metaResponse = await axios.get(
-      `${premisesBaseUrl}/student-exam/attempt-meta`,
+    let finalExamId = examId;
+    let finalEmail = email;
+
+    if (attempt && (!finalExamId || !finalEmail)) {
+      const metaResponse = await axios.get(
+        `${examBaseUrl}/student-exam/attempt-meta`,
+        {
+          params: { attempt },
+          timeout: 15000,
+        }
+      );
+
+      finalExamId = metaResponse?.data?.examId;
+      finalEmail = metaResponse?.data?.email;
+    }
+
+    if (!finalExamId || !finalEmail) {
+      return res.status(404).json({
+        ok: false,
+        detail: "examId or email unavailable",
+      });
+    }
+
+    const statusResponse = await axios.get(
+      `${examBaseUrl}/student-exam/status`,
       {
-        params: { attempt },
+        params: {
+          examId: finalExamId,
+          email: finalEmail,
+        },
         timeout: 15000,
       }
     );
 
-    const examId = metaResponse?.data?.examId;
-    const email = metaResponse?.data?.email;
-
-    if (!examId || !email) {
-      return res.status(404).json({
-        ok: false,
-        detail: "examId or email unavailable for attempt",
-      });
-    }
-
-    const student = await CompanyStudentUpload.findOne({
-      examId,
-      emailNormalized: String(email).toLowerCase().trim(),
-    }).select("examStatus premisesJobId premisesMergeStatus examSubmittedAt");
-
-    if (!student) {
-      return res.status(404).json({
-        ok: false,
-        detail: "student exam record not found",
-      });
-    }
-
     return res.json({
       ok: true,
-      attempt,
-      examId,
-      email,
-      examStatus: student.examStatus,
-      submitted: student.examStatus === "SUBMITTED",
-      premisesJobId: student.premisesJobId,
-      premisesMergeStatus: student.premisesMergeStatus,
-      examSubmittedAt: student.examSubmittedAt,
+      attempt: attempt || null,
+      ...statusResponse.data,
     });
   } catch (error) {
     console.error(
