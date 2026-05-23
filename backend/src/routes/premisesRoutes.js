@@ -1,5 +1,5 @@
 import express from "express";
-import { premisesImageUpload } from "../middleware/premisesUpload.js";
+import { premisesImageUpload, premisesVideoUpload, } from "../middleware/premisesUpload.js";
 import {
   premisesHealth,
   createPremisesSession,
@@ -39,5 +39,10 @@ router.post(
 );
 
 router.post("/exam/start-merge", startExamPremisesMerge);
+router.post(
+  "/exam/upload-segment",
+  premisesVideoUpload.single("file"),
+  uploadExamPremisesSegment
+);
 
 export default router;

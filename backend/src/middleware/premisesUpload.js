@@ -17,3 +17,21 @@ export const premisesImageUpload = multer({
     cb(null, true);
   },
 });
+
+export const premisesVideoUpload = multer({
+  storage,
+  limits: {
+    fileSize: 250 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype === "video/mp4" ||
+      file.mimetype === "video/webm" ||
+      file.mimetype === "video/quicktime"
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only MP4, WEBM, and MOV videos are allowed"));
+    }
+  },
+});
