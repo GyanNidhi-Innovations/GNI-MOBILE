@@ -300,9 +300,7 @@ export const uploadExamPremisesSegment = async (req, res) => {
       });
     }
 
-    const meta = req.body.meta;
-
-    if (!meta) {
+    if (!req.body.meta) {
       return res.status(400).json({
         ok: false,
         detail: "meta is required",
@@ -310,28 +308,38 @@ export const uploadExamPremisesSegment = async (req, res) => {
     }
 
     const premisesBaseUrl =
-      process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in";
+      process.env.PREMISES_BACKEND_URL || "https://demos.gyannidhi.in/premises";
 
     const formData = new FormData();
 
-    formData.append("meta", meta);
+    formData.append("meta", req.body.meta);
 
-    formData.append("file", new Blob([req.file.buffer]), {
+    formData.append("file", Buffer.from(req.file.buffer), {
       filename: req.file.originalname || "segment.mp4",
       contentType: req.file.mimetype || "video/mp4",
+      knownLength: req.file.size,
     });
 
     const response = await axios.post(
       `${premisesBaseUrl}/api/exam/upload-segment`,
       formData,
       {
-        headers: formData.getHeaders ? formData.getHeaders() : {},
-        timeout: 60000,
+        headers: {
+          ...formData.getHeaders(),
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        timeout: 180000,
       }
     );
 
     return res.status(response.status).json(response.data);
   } catch (error) {
+    console.error(
+      "Upload exam premises segment error:",
+      error.response?.data || error.message
+    );
+
     return res.status(error.response?.status || 502).json({
       ok: false,
       detail: error.response?.data || error.message,
