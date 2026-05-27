@@ -82,7 +82,12 @@ export const createEvent = async (req, res) => {
 
 export const getEvents = async (req, res) => {
   try {
-    const events = await Event.find().sort({ date: 1 });
+    const events = await Event.find()
+  .populate(
+    "registeredUsers",
+    "fullName name email phone mobile studentEmail"
+  )
+  .sort({ date: 1 });
 
     return res.status(200).json({
       success: true,
@@ -118,7 +123,10 @@ export const getEventById = async (req, res) => {
       });
     }
 
-    const event = await Event.findById(id);
+    const event = await Event.findById(id).populate(
+      "registeredUsers",
+      "fullName name email phone mobile studentEmail"
+    );
 
     if (!event) {
       return res.status(404).json({
