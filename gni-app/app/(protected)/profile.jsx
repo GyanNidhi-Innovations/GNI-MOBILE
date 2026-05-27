@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
 
@@ -79,18 +80,25 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleLogout = () => {
+    logout();
+    router.replace("/auth/login");
+  };
+
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="small" color="#2563eb" />
+      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
+        <ActivityIndicator size="small" color="#0F5EFF" />
       </View>
     );
   }
 
   if (!user) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <Text className="text-base text-gray-600">No user data found</Text>
+      <View className="flex-1 items-center justify-center bg-[#F6F8FB] px-8">
+        <Text className="text-center text-[16px] text-[#667085]">
+          No user data found
+        </Text>
       </View>
     );
   }
@@ -105,117 +113,135 @@ export default function ProfileScreen() {
     : "U";
 
   return (
-    <ScrollView className="flex-1 bg-gray-100">
-      <View className="p-5">
-        <View className="bg-blue-900 rounded-3xl p-6 mb-5">
-          <View className="flex-row items-center">
-            <View className="h-20 w-20 rounded-full bg-blue-200 items-center justify-center mr-4">
-              <Text className="text-2xl font-bold text-blue-900">
-                {initials}
-              </Text>
-            </View>
+    <ScrollView
+      className="flex-1 bg-[#F6F8FB]"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingTop: 24,
+        paddingBottom: 120,
+      }}
+    >
+      <View className="mb-7">
+        <Text className="text-[32px] font-bold text-[#101828]">Profile</Text>
+        <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
+          Manage your account and registered events.
+        </Text>
+      </View>
 
-            <View className="flex-1">
-              <Text className="text-white text-2xl font-bold">
-                {user.name || "User"}
-              </Text>
-              <Text className="text-blue-100 mt-1">
-                {user.email || "No email"}
-              </Text>
-            </View>
+      <View className="mb-6 rounded-[30px] bg-[#0F5EFF] p-6">
+        <View className="flex-row items-center">
+          <View className="mr-5 h-20 w-20 items-center justify-center rounded-[28px] bg-white">
+            <Text className="text-[26px] font-bold text-[#0F5EFF]">
+              {initials}
+            </Text>
+          </View>
+
+          <View className="flex-1">
+            <Text className="text-[24px] font-bold text-white">
+              {user.name || "User"}
+            </Text>
+            <Text className="mt-2 text-[14px] text-blue-100">
+              {user.email || "No email"}
+            </Text>
           </View>
         </View>
+      </View>
 
-        <View className="bg-white rounded-2xl p-5 mb-5">
-          <Text className="text-lg font-bold text-blue-900 mb-4">
-            Personal Details
-          </Text>
+      <View className="mb-6 flex-row gap-4">
+        <InfoBox title="Status" value="Active" />
+        <InfoBox title="Role" value={user.type || "User"} />
+      </View>
 
-          <ProfileItem icon="person-outline" label="Name" value={user.name} />
-          <Divider />
-          <ProfileItem icon="mail-outline" label="Email" value={user.email} />
-          <Divider />
-          <ProfileItem icon="call-outline" label="Phone" value={user.phone} />
-          <Divider />
-          <ProfileItem icon="school-outline" label="College" value={user.college} />
-          <Divider />
-          <ProfileItem icon="book-outline" label="Branch" value={user.branch} />
-        </View>
+      <View className="mb-6 rounded-[28px] bg-white p-5">
+        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
+          Personal Details
+        </Text>
 
-        <View className="bg-blue-50 rounded-2xl p-5 mb-5 border border-blue-100">
-          <Text className="text-lg font-bold text-blue-900 mb-4">
-            Account Overview
-          </Text>
+        <ProfileItem icon="person-outline" label="Name" value={user.name} />
+        <Divider />
+        <ProfileItem icon="mail-outline" label="Email" value={user.email} />
+        <Divider />
+        <ProfileItem icon="call-outline" label="Phone" value={user.phone} />
+        <Divider />
+        <ProfileItem
+          icon="school-outline"
+          label="College"
+          value={user.college}
+        />
+        <Divider />
+        <ProfileItem icon="book-outline" label="Branch" value={user.branch} />
+      </View>
 
-          <View className="flex-row justify-between">
-            <InfoBox title="Status" value="Active" />
-            <InfoBox title="Role" value={user.type || "User"} />
+      <View className="mb-6">
+        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
+          Registered Events
+        </Text>
+
+        {registeredEvents.length === 0 ? (
+          <View className="rounded-[28px] bg-white p-6">
+            <Text className="text-[14px] text-[#667085]">
+              No registered events yet
+            </Text>
           </View>
-        </View>
+        ) : (
+          registeredEvents.map((event) => (
+            <Pressable
+              key={event._id}
+              onPress={() => handleOpenEvent(event)}
+              className="mb-4 rounded-[28px] bg-white p-5"
+            >
+              <View className="flex-row items-start">
+                <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
+                  <Ionicons
+                    name="calendar-outline"
+                    size={20}
+                    color="#0F5EFF"
+                  />
+                </View>
 
-        <View className="bg-white rounded-2xl p-5 mb-5">
-          <Text className="text-lg font-bold text-blue-900 mb-4">
-            My Registered Events
-          </Text>
+                <View className="flex-1">
+                  <Text className="text-[16px] font-semibold text-[#101828]">
+                    {event.title || "Untitled Event"}
+                  </Text>
 
-          {registeredEvents.length === 0 ? (
-            <Text className="text-gray-500">No registered events yet</Text>
-          ) : (
-            registeredEvents.map((event, index) => (
-              <View key={event._id}>
-                <Pressable
-                  onPress={() => handleOpenEvent(event)}
-                  className="flex-row items-start"
-                >
-                  <View className="h-11 w-11 rounded-full bg-blue-100 items-center justify-center mr-3">
-                    <Ionicons
-                      name="calendar-outline"
-                      size={20}
-                      color="#1d4ed8"
-                    />
-                  </View>
+                  <Text className="mt-2 text-[14px] text-[#667085]">
+                    {event.date
+                      ? new Date(event.date).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "-"}
+                  </Text>
 
-                  <View className="flex-1">
-                    <Text className="text-base font-semibold text-black">
-                      {event.title || "Untitled Event"}
-                    </Text>
+                  <Text className="mt-1 text-[14px] text-[#667085]">
+                    {event.location || "Online"}
+                  </Text>
 
-                    <Text className="text-sm text-gray-500 mt-1">
-                      📅{" "}
-                      {event.date
-                        ? new Date(event.date).toLocaleDateString()
-                        : "-"}
-                    </Text>
+                  <Text className="mt-3 text-[12px] font-semibold text-[#0F5EFF]">
+                    View details
+                  </Text>
+                </View>
 
-                    <Text className="text-sm text-gray-500 mt-1">
-                      📍 {event.location || "-"}
-                    </Text>
-
-                    <Text className="text-blue-600 text-xs mt-2 font-medium">
-                      Tap to open
-                    </Text>
-                  </View>
-                </Pressable>
-
-                {index !== registeredEvents.length - 1 && <Divider />}
+                <Ionicons name="chevron-forward" size={18} color="#98A2B3" />
               </View>
-            ))
-          )}
-        </View>
+            </Pressable>
+          ))
+        )}
+      </View>
 
-        <Pressable
-          onPress={() => {
-            logout();
-            router.replace("/auth/login");
-          }}
-          className="bg-red-700 py-4 rounded-2xl flex-row items-center justify-center"
-        >
-          <Ionicons name="log-out-outline" size={20} color="white" />
-          <Text className="text-white font-semibold text-base ml-2">
+      <Pressable
+        onPress={handleLogout}
+        className="rounded-[24px] bg-[#FEF3F2] px-5 py-4"
+      >
+        <View className="flex-row items-center justify-center">
+          <Ionicons name="log-out-outline" size={20} color="#B42318" />
+          <Text className="ml-2 text-[15px] font-semibold text-[#B42318]">
             Logout
           </Text>
-        </Pressable>
-      </View>
+        </View>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -223,13 +249,15 @@ export default function ProfileScreen() {
 function ProfileItem({ icon, label, value }) {
   return (
     <View className="flex-row items-center">
-      <View className="h-11 w-11 rounded-full bg-blue-100 items-center justify-center mr-3">
-        <Ionicons name={icon} size={20} color="#1d4ed8" />
+      <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
+        <Ionicons name={icon} size={20} color="#0F5EFF" />
       </View>
 
       <View className="flex-1">
-        <Text className="text-xs text-gray-500 mb-1">{label}</Text>
-        <Text className="text-base font-semibold text-black">
+        <Text className="text-[12px] font-medium text-[#98A2B3]">
+          {label}
+        </Text>
+        <Text className="mt-1 text-[15px] font-semibold text-[#101828]">
           {value || "-"}
         </Text>
       </View>
@@ -238,14 +266,16 @@ function ProfileItem({ icon, label, value }) {
 }
 
 function Divider() {
-  return <View className="h-px bg-gray-200 my-4" />;
+  return <View className="my-5 h-px bg-[#EAECF0]" />;
 }
 
 function InfoBox({ title, value }) {
   return (
-    <View className="bg-white rounded-xl px-4 py-4 items-center flex-1 mx-1">
-      <Text className="text-xs text-gray-500">{title}</Text>
-      <Text className="text-base font-bold text-blue-900 mt-1">{value}</Text>
+    <View className="flex-1 rounded-[24px] bg-white p-5">
+      <Text className="text-[13px] text-[#667085]">{title}</Text>
+      <Text className="mt-3 text-[15px] font-bold text-[#101828]">
+        {value}
+      </Text>
     </View>
   );
 }

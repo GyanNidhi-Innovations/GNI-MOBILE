@@ -69,7 +69,7 @@ export const loginRegistrationUser = async (req, res) => {
         email: user.email,
         type: user.type,
       },
-      process.env.JWT_SECRET || "gni_mobile_secret_key",
+      process.env.JWT_SECRET || "your_super_secret_key",
       {
         expiresIn: "30d",
       }

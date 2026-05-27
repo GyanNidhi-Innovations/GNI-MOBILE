@@ -1,6 +1,18 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Image,
+} from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
 import { loginUserApi } from "../../src/services/authService";
 import { useAuthStore } from "../../src/stores/authStore";
 
@@ -13,50 +25,49 @@ export default function LoginScreen() {
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const handleLogin = async () => {
-    console.log("Login button clicked");
-
     if (!email.trim() || !password.trim()) {
-      console.log("Validation failed: email or password missing");
       Alert.alert("Validation", "Please enter email and password");
       return;
     }
 
-    if (loading) {
-      console.log("Login skipped because loading is true");
-      return;
-    }
+    if (loading) return;
 
     try {
       setLoading(true);
 
-      const payload = {
+      const response = await loginUserApi({
         email: email.trim(),
         password: password.trim(),
-      };
-
-      console.log("Sending login payload:", payload);
-
-      const response = await loginUserApi(payload);
-
-      console.log("Login API response:", response);
+      });
 
       if (response?.success) {
-        setAuth({
-          user: response.user,
-          token: response.token || null,
-        });
+        console.log("LOGIN RESPONSE:", response);
 
-        console.log("Login success, navigating to home");
+        const token =
+          response.token ||
+          response.accessToken ||
+          response.jwt ||
+          response.data?.token ||
+          response.data?.accessToken ||
+          null;
+              
+        const user =
+          response.user ||
+          response.data?.user ||
+          null;
+              
+        console.log("TOKEN FOUND:", token);
+              
+        await setAuth({
+          user,
+          token,
+        });
+      
         router.replace("/(protected)/home");
-      } else {
-        console.log("Login failed response:", response);
+      }else {
         Alert.alert("Login failed", response?.message || "Invalid credentials");
       }
     } catch (error) {
-      console.log("Login error full object:", error);
-      console.log("Login error message:", error?.message);
-      console.log("Login error response:", error?.response?.data);
-
       Alert.alert(
         "Error",
         error?.response?.data?.message ||
@@ -64,60 +75,91 @@ export default function LoginScreen() {
           "Something went wrong"
       );
     } finally {
-      console.log("Login request finished");
       setLoading(false);
     }
   };
 
   return (
-    <View className="flex-1 justify-center bg-white px-6">
-      <Text className="mb-2 text-center text-3xl font-bold text-black">
-        GyanNidhi
-      </Text>
+    <KeyboardAvoidingView
+      className="flex-1 bg-[#F6F8FB]"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <View className="flex-1 justify-center px-6">
+        <View className="mb-5 items-center" >
+          <Image
+            source={{
+              uri: "https://res.cloudinary.com/dwqwtolrt/image/upload/c_limit,w_800,q_75,f_auto/v1760073633/logo_wvim3n.png",
+            }}
+            className="mb-5 h-20 w-56"
+            resizeMode="contain"
+          />
+        </View>
 
-      <Text className="mb-8 text-center text-base text-gray-500">
-        Login to continue
-      </Text>
+        <View className="rounded-[32px] bg-white p-6">
+          <Text className="mb-2 text-[13px] font-semibold text-[#101828]">
+            Email Address
+          </Text>
 
-      <TextInput
-        placeholder="Enter email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        className="mb-4 rounded-xl border border-gray-300 px-4 py-3"
-      />
+          <View className="mb-5 flex-row items-center rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-4">
+            <Ionicons name="mail-outline" size={20} color="#98A2B3" />
 
-      <View className="mb-5 flex-row items-center rounded-xl border border-gray-300 px-4">
-        <TextInput
-          placeholder="Enter password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          className="flex-1 py-3"
-        />
-        <Pressable onPress={() => setShowPassword(!showPassword)}>
-          <Text className="font-semibold text-blue-600">
-            {showPassword ? "Hide" : "Show"}
+            <TextInput
+              placeholder="Enter email"
+              placeholderTextColor="#667085"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              className="ml-3 flex-1 py-4 text-[15px] text-[#101828]"
+            />
+          </View>
+
+          <Text className="mb-2 text-[13px] font-semibold text-[#101828]">
+            Password
+          </Text>
+
+          <View className="mb-6 flex-row items-center rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-4">
+            <Ionicons name="lock-closed-outline" size={20} color="#98A2B3" />
+
+            <TextInput
+              placeholder="Enter password"
+              placeholderTextColor="#667085"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              className="ml-3 flex-1 py-4 text-[15px] text-[#101828]"
+            />
+
+            <Pressable onPress={() => setShowPassword(!showPassword)}>
+              <Text className="text-[13px] font-semibold text-[#0F5EFF]">
+                {showPassword ? "Hide" : "Show"}
+              </Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={handleLogin}
+            disabled={loading}
+            className={`items-center rounded-[22px] py-4 ${
+              loading ? "bg-[#D0D5DD]" : "bg-[#0F5EFF]"
+            }`}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text className="text-[16px] font-semibold text-white">
+                Login
+              </Text>
+            )}
+          </Pressable>
+        </View>
+
+        <Pressable onPress={() => router.push("/auth/signup")}>
+          <Text className="mt-8 text-center text-[14px] font-semibold text-[#0F5EFF]">
+            Don&apos;t have an account? Sign up
           </Text>
         </Pressable>
       </View>
-
-      <Pressable
-        onPress={handleLogin}
-        disabled={loading}
-        className="items-center rounded-xl bg-blue-600 py-3"
-      >
-        <Text className="text-base font-semibold text-white">
-          {loading ? "Logging in..." : "Login"}
-        </Text>
-      </Pressable>
-
-      <Pressable onPress={() => router.push("/auth/signup")}>
-        <Text className="mt-5 text-center text-sm text-blue-600">
-          Don&apos;t have an account? Sign up
-        </Text>
-      </Pressable>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

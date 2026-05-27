@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
   View,
   Text,
@@ -8,23 +9,35 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+
 import { router } from "expo-router";
+
 import { getEvents } from "@/services/eventService";
+
+import { Ionicons } from "@expo/vector-icons";
 
 export default function EventsScreen() {
   const [activeTab, setActiveTab] = useState("upcoming");
+
   const [events, setEvents] = useState([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
+
         const res = await getEvents();
+
         setEvents(res?.events || []);
       } catch (error) {
-        console.log("fetchEvents error:", error);
-        Alert.alert("Error", "Failed to load events");
+        console.log(error);
+
+        Alert.alert(
+          "Error",
+          "Failed to load events"
+        );
       } finally {
         setLoading(false);
       }
@@ -59,24 +72,28 @@ export default function EventsScreen() {
       }
     });
 
-    upcoming.sort((a, b) => {
-      const aDate = a?.date ? new Date(a.date).getTime() : Infinity;
-      const bDate = b?.date ? new Date(b.date).getTime() : Infinity;
-      return aDate - bDate;
-    });
+    upcoming.sort(
+      (a, b) =>
+        new Date(a.date) - new Date(b.date)
+    );
 
-    past.sort((a, b) => {
-      const aDate = a?.date ? new Date(a.date).getTime() : 0;
-      const bDate = b?.date ? new Date(b.date).getTime() : 0;
-      return bDate - aDate;
-    });
+    past.sort(
+      (a, b) =>
+        new Date(b.date) - new Date(a.date)
+    );
 
-    return activeTab === "upcoming" ? upcoming : past;
+    return activeTab === "upcoming"
+      ? upcoming
+      : past;
   }, [events, activeTab]);
 
   const handleOpenEvent = (event) => {
     if (!event?._id) {
-      Alert.alert("Error", "This event does not have a valid id");
+      Alert.alert(
+        "Error",
+        "Invalid event id"
+      );
+
       return;
     }
 
@@ -89,86 +106,165 @@ export default function EventsScreen() {
     });
   };
 
-  const renderEventCard = ({ item: event }) => (
-    <Pressable
-      onPress={() => handleOpenEvent(event)}
-      className="bg-white rounded-2xl mb-4 overflow-hidden shadow-sm"
-    >
-      <Image
-        source={{
-          uri:
-            event.image && event.image.trim()
-              ? event.image
-              : "https://via.placeholder.com/600x300.png?text=Event+Image",
-        }}
-        className="w-full h-48"
-        resizeMode="cover"
-      />
+  const renderEventCard = ({ item: event }) => {
+    return (
+      <Pressable
+        onPress={() => handleOpenEvent(event)}
+        className="mb-6 overflow-hidden rounded-[30px] bg-white"
+      >
+        <Image
+          source={{
+            uri:
+              event.image &&
+              event.image.trim()
+                ? event.image
+                : "https://via.placeholder.com/600x300.png?text=Event",
+          }}
+          className="h-56 w-full"
+          resizeMode="cover"
+        />
 
-      <View className="p-4">
-        <Text className="text-lg font-bold text-gray-900 mb-1">
-          {event.title || "Untitled Event"}
-        </Text>
+        <View className="p-6">
+          <View className="mb-3 flex-row items-center justify-between">
+            <View className="rounded-full bg-[#EEF4FF] px-3 py-1">
+              <Text className="text-[12px] font-semibold text-[#0F5EFF]">
+                Event
+              </Text>
+            </View>
 
-        <Text className="text-gray-600 text-sm mb-1">
-          📍 {event.location || "-"}
-        </Text>
+            <Ionicons name="chevron-forward" size={18} color="#98A2B3" />
+          </View>
 
-        <Text className="text-gray-600 text-sm mb-2">
-          📅{" "}
-          {event.date
-            ? new Date(event.date).toLocaleDateString()
-            : "Date not available"}
-        </Text>
+          <Text className="text-[24px] font-bold leading-8 text-[#101828]">
+            {event.title || "Untitled Event"}
+          </Text>
 
-        <Text className="text-gray-500 text-sm">
-          {event.description || "No description available"}
-        </Text>
-      </View>
-    </Pressable>
-  );
+          <View className="mt-5">
+            <View className="mb-3 flex-row items-center">
+              <Ionicons name="calendar-outline" size={16} color="#0F5EFF" />
+
+              <Text className="ml-2 text-[14px] text-[#667085]">
+                {event.date
+                  ? new Date(
+                      event.date
+                    ).toLocaleDateString(
+                      "en-IN",
+                      {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      }
+                    )
+                  : "Date unavailable"}
+              </Text>
+            </View>
+
+            <View className="flex-row items-center">
+              <Ionicons name="location-outline" size={16} color="#0F5EFF" />
+
+              <Text className="ml-2 text-[14px] text-[#667085]">
+                {event.location || "Online"}
+              </Text>
+            </View>
+          </View> 
+
+          <Text
+            numberOfLines={3}
+            className="mt-5 text-[14px] leading-6 text-[#667085]"
+          >
+            {event.description ||
+              "No description available"}
+          </Text>
+
+          <View className="mt-6 flex-row items-center justify-between">
+            <Text className="text-[13px] font-medium text-[#98A2B3]">
+              Tap to view details
+            </Text>
+
+            <View className="rounded-2xl bg-[#0F5EFF] px-5 py-3">
+              <Text className="font-semibold text-white">
+                Open
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
-    <View className="flex-1 bg-gray-100 px-5 pt-4">
-      <View className="flex-row mb-5">
-        <Pressable
-          onPress={() => setActiveTab("upcoming")}
-          className={`flex-1 py-3 rounded-xl mr-1.5 ${
-            activeTab === "upcoming" ? "bg-blue-600" : "bg-gray-200"
-          }`}
-        >
-          <Text
-            className={`text-center font-semibold ${
-              activeTab === "upcoming" ? "text-white" : "text-gray-900"
-            }`}
-          >
-            Upcoming Events
-          </Text>
-        </Pressable>
+    <View className="flex-1 bg-[#F6F8FB]">
+      {/* TOP SECTION */}
 
-        <Pressable
-          onPress={() => setActiveTab("past")}
-          className={`flex-1 py-3 rounded-xl ml-1.5 ${
-            activeTab === "past" ? "bg-blue-600" : "bg-gray-200"
-          }`}
-        >
-          <Text
-            className={`text-center font-semibold ${
-              activeTab === "past" ? "text-white" : "text-gray-900"
+      <View className="px-5 pt-6">
+        <Text className="text-[32px] font-bold text-[#101828]">
+          Discover
+        </Text>
+
+        <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
+          Explore workshops, drives, internships,
+          and industry events.
+        </Text>
+
+        {/* FILTERS */}
+
+        <View className="mt-7 flex-row">
+          <Pressable
+            onPress={() =>
+              setActiveTab("upcoming")
+            }
+            className={`mr-3 rounded-full px-5 py-3 ${
+              activeTab === "upcoming"
+                ? "bg-[#0F5EFF]"
+                : "bg-white"
             }`}
           >
-            Past Events
-          </Text>
-        </Pressable>
+            <Text
+              className={`font-semibold ${
+                activeTab === "upcoming"
+                  ? "text-white"
+                  : "text-[#667085]"
+              }`}
+            >
+              Upcoming
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setActiveTab("past")}
+            className={`rounded-full px-5 py-3 ${
+              activeTab === "past"
+                ? "bg-[#0F5EFF]"
+                : "bg-white"
+            }`}
+          >
+            <Text
+              className={`font-semibold ${
+                activeTab === "past"
+                  ? "text-white"
+                  : "text-[#667085]"
+              }`}
+            >
+              Past
+            </Text>
+          </Pressable>
+        </View>
       </View>
+
+      {/* CONTENT */}
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="small" color="#2563eb" />
+          <ActivityIndicator
+            size="small"
+            color="#0F5EFF"
+          />
         </View>
       ) : filteredEvents.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-gray-500">No events available</Text>
+        <View className="flex-1 items-center justify-center px-10">
+          <Text className="text-center text-[16px] text-[#667085]">
+            No events available right now.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -176,8 +272,11 @@ export default function EventsScreen() {
           keyExtractor={(item) => item._id}
           renderItem={renderEventCard}
           showsVerticalScrollIndicator={false}
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 28,
+            paddingBottom: 120,
+          }}
         />
       )}
     </View>

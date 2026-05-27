@@ -8,25 +8,39 @@ export default {
     scheme: "gniapp",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+
     ios: {
-      supportsTablet: true
+      supportsTablet: true,
     },
+
     android: {
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/icon.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-      package: "com.anonymous.gniapp"
+      package: "com.anonymous.gniapp",
     },
+
     web: {
       output: "static",
-      favicon: "./assets/images/favicon.png"
+      favicon: "./assets/images/favicon.png",
     },
+
     plugins: [
       "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          cameraPermission: "Allow GyanNidhi to access your camera.",
+          microphonePermission:
+            "Allow GyanNidhi to record premises video.",
+        },
+      ],
       "expo-notifications",
       [
         "expo-splash-screen",
@@ -36,22 +50,23 @@ export default {
           resizeMode: "contain",
           backgroundColor: "#ffffff",
           dark: {
-            backgroundColor: "#000000"
-          }
-        }
-      ]
+            backgroundColor: "#000000",
+          },
+        },
+      ],
     ],
+
     experiments: {
       typedRoutes: true,
-      reactCompiler: true
+      reactCompiler: true,
     },
+
     extra: {
       router: {},
       apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
       eas: {
-        projectId: "c19580eb-329f-4442-ab77-21a800dfc39c"
-      }
-    }
-  }
+        projectId: "c19580eb-329f-4442-ab77-21a800dfc39c",
+      },
+    },
+  },
 };
-

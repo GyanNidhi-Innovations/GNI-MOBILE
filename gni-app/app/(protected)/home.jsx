@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,13 +7,19 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
+
 import { router, useFocusEffect } from "expo-router";
+
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
+
 import { Image } from "react-native";
+
+import { Ionicons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
+
   const userId = user?.id || user?._id;
 
   const [registeredEvents, setRegisteredEvents] = useState([]);
@@ -30,18 +36,27 @@ export default function HomeScreen() {
 
       setLoading(true);
 
-      const [eventsRes, unreadRes, notificationsRes] = await Promise.all([
-        apiClient(`/events/registered/${userId}`),
-        apiClient(`/notifications/unread/${userId}`),
-        apiClient(`/notifications/user/${userId}`),
-      ]);
+      const [eventsRes, unreadRes, notificationsRes] =
+        await Promise.all([
+          apiClient(`/events/registered/${userId}`),
+          apiClient(`/notifications/unread/${userId}`),
+          apiClient(`/notifications/user/${userId}`),
+        ]);
 
       setRegisteredEvents(eventsRes?.events || []);
+
       setUnreadCount(unreadRes?.count || 0);
-      setRecentNotifications((notificationsRes?.notifications || []).slice(0, 2));
+
+      setRecentNotifications(
+        (notificationsRes?.notifications || []).slice(0, 3)
+      );
     } catch (error) {
-      console.log("fetchDashboard error:", error);
-      Alert.alert("Error", error?.message || "Failed to load dashboard");
+      console.log(error);
+
+      Alert.alert(
+        "Error",
+        error?.message || "Failed to load dashboard"
+      );
     } finally {
       setLoading(false);
     }
@@ -58,177 +73,238 @@ export default function HomeScreen() {
 
   const nextEvent = useMemo(() => {
     return registeredEvents
-      .filter((event) => event?.date && new Date(event.date) >= new Date())
-      .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+      .filter(
+        (event) =>
+          event?.date && new Date(event.date) >= new Date()
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.date) - new Date(b.date)
+      )[0];
   }, [registeredEvents]);
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-100">
-        <ActivityIndicator size="small" color="#2563eb" />
+      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
+        <ActivityIndicator size="small" color="#0F5EFF" />
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-100" contentContainerStyle={{ padding: 20 }}>
-      <View className="mb-6">
-        <Image
-  source={{
-    uri: "https://res.cloudinary.com/dwqwtolrt/image/upload/c_limit,w_800,q_75,f_auto/v1760073633/logo_wvim3n.png",
-  }}
-  className="w-40 h-12 mb-2"
-  resizeMode="contain"
-/>
-        <Text className="mt-1 text-xl text-gray-600">
-          Welcome back, {user?.name || "User"}
-        </Text>
-      </View>
+    <ScrollView
+      className="flex-1 bg-[#F6F8FB]"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingTop: 24,
+        paddingBottom: 120,
+      }}
+    >
+      {/* HEADER */}
 
-      <View className="bg-blue-900 rounded-3xl p-5 mb-5">
-        <Text className="text-blue-100 text-sm font-medium mb-2">
+      <View className="mb-8 flex-row items-center justify-between">
+  <Image
+    source={{
+      uri: "https://res.cloudinary.com/dwqwtolrt/image/upload/c_limit,w_800,q_75,f_auto/v1760073633/logo_wvim3n.png",
+    }}
+    className="h-10 w-28"
+    resizeMode="contain"
+  />
+
+  <View className="items-end">
+    <Text className="text-[14px] text-[#667085]">
+      Welcome back
+    </Text>
+
+    <Text className="mt-1 text-right text-[24px] font-bold text-[#101828]">
+      {user?.name || "User"} 👋
+    </Text>
+  </View>
+</View>
+
+      {/* HERO EVENT CARD */}
+
+      <View className="mb-7 overflow-hidden rounded-[28px] bg-[#0F5EFF] p-6">
+        <Text className="text-[13px] font-medium text-blue-100">
           Your Next Event
         </Text>
 
         {nextEvent ? (
           <>
-            <Text className="text-white text-xl font-bold mb-2">
+            <Text className="mt-3 text-[26px] font-bold leading-8 text-white">
               {nextEvent.title}
             </Text>
 
-            <Text className="text-blue-100 text-sm mb-1">
-              📅 {new Date(nextEvent.date).toLocaleString()}
-            </Text>
+            <View className="mt-5">
+              <View className="mb-3 flex-row items-center">
+                <Ionicons name="calendar-outline" size={16} color="#DBEAFE" />
 
-            <Text className="text-blue-100 text-sm mb-4">
-              📍 {nextEvent.location || "-"}
-            </Text>
+                <Text className="ml-2 text-[14px] text-blue-100">
+                  {new Date(
+                    nextEvent.date
+                  ).toLocaleString()}
+                </Text>
+              </View>
+
+              <Text className="text-[14px] text-blue-100">
+                {nextEvent.location || "Online"}
+              </Text>
+            </View>
 
             <Pressable
               onPress={() =>
                 router.push({
-                  pathname: "/(protected)/events/[id]",
+                  pathname:
+                    "/(protected)/events/[id]",
                   params: {
                     id: nextEvent._id,
-                    source: "home",
                   },
                 })
               }
-              className="bg-blue-600 px-4 py-3 rounded-xl self-start"
+              className="mt-6 self-start rounded-2xl bg-white px-5 py-3"
             >
-              <Text className="text-white font-semibold">View Event</Text>
+              <Text className="font-semibold text-[#0F5EFF]">
+                View Event
+              </Text>
             </Pressable>
           </>
         ) : (
           <>
-            <Text className="text-white text-lg font-semibold mb-2">
-              No upcoming events
+            <Text className="mt-3 text-[24px] font-bold text-white">
+              No Upcoming Events
             </Text>
-            <Text className="text-blue-100 text-sm mb-4">
-              Explore events and register for your next opportunity.
+
+            <Text className="mt-3 text-[14px] leading-6 text-blue-100">
+              Explore upcoming workshops, internships,
+              and opportunities.
             </Text>
 
             <Pressable
-              onPress={() => router.push("/(protected)/events")}
-              className="bg-blue-600 px-4 py-3 rounded-xl self-start"
+              onPress={() =>
+                router.push("/(protected)/events")
+              }
+              className="mt-6 self-start rounded-2xl bg-white px-5 py-3"
             >
-              <Text className="text-white font-semibold">Explore Events</Text>
+              <Text className="font-semibold text-[#0F5EFF]">
+                Explore Events
+              </Text>
             </Pressable>
           </>
         )}
       </View>
 
-      <View className="flex-row gap-3 mb-5">
-        <StatCard title="My Events" value={registeredEvents.length} />
-        <StatCard title="Unread" value={unreadCount} />
+      {/* STATS */}
+
+      <View className="mb-8 flex-row gap-4">
+        <ModernStatCard
+          title="Registered"
+          value={registeredEvents.length}
+        />
+
+        <ModernStatCard
+          title="Unread"
+          value={unreadCount}
+        />
       </View>
 
-      <View className="bg-white rounded-2xl p-5 mb-5">
-        <Text className="text-lg font-bold text-blue-900 mb-4">
-          Quick Actions
-        </Text>
+      {/* QUICK ACTIONS */}
 
-        <Pressable
-          onPress={() => router.push("/(protected)/events")}
-          className="bg-gray-50 rounded-2xl p-4 mb-3 border border-gray-100"
-        >
-          <Text className="text-lg font-semibold text-gray-900">📅 Events</Text>
-          <Text className="text-sm text-gray-500 mt-1">
-            Explore and register for events
+      <View className="mb-8">
+        <View className="mb-5 flex-row items-center justify-between">
+          <Text className="text-[20px] font-bold text-[#101828]">
+            Quick Access
           </Text>
-        </Pressable>
 
-        <Pressable
-          onPress={() => router.push("/(protected)/calendar")}
-          className="bg-gray-50 rounded-2xl p-4 mb-3 border border-gray-100"
-        >
-          <Text className="text-lg font-semibold text-gray-900">📆 Calendar</Text>
-          <Text className="text-sm text-gray-500 mt-1">
-            View your scheduled events
-          </Text>
-        </Pressable>
+<Ionicons name="chevron-forward" size={18} color="#98A2B3" />
+        </View>
 
-        <Pressable
-          onPress={() => router.push("/(protected)/notifications")}
-          className="bg-gray-50 rounded-2xl p-4 border border-gray-100"
-        >
-          <Text className="text-lg font-semibold text-gray-900">🔔 Notifications</Text>
-          <Text className="text-sm text-gray-500 mt-1">
-            Check your latest updates
-          </Text>
-        </Pressable>
-        <Pressable
+<View className="flex-row flex-wrap justify-between">
+  <QuickActionCard
+    title="Events"
+    subtitle="Explore events"
+    icon={
+      <Ionicons name="calendar-outline" size={22} color="#0F5EFF" />
+    }
+    onPress={() => router.push("/(protected)/events")}
+  />
+
+  <QuickActionCard
+    title="Calendar"
+    subtitle="View schedule"
+    icon={
+      <Ionicons name="today-outline" size={22} color="#0F5EFF" />
+    }
+    onPress={() => router.push("/(protected)/calendar")}
+  />
+
+  <QuickActionCard
+    title="Alerts"
+    subtitle="Recent updates"
+    icon={
+      <Ionicons name="notifications-outline" size={22} color="#0F5EFF" />
+    }
+    onPress={() => router.push("/(protected)/notifications")}
+  />
+
+  <QuickActionCard
+    title="Premises"
+    subtitle="Camera validation"
+    icon={
+      <Ionicons name="camera-outline" size={22} color="#0F5EFF" />
+    }
     onPress={() => router.push("/premises")}
-    className="bg-[#001C80] rounded-2xl p-4 border border-blue-900"
-  >
-    <Text className="text-lg font-semibold text-white">
-      📷 Premises Check
-    </Text>
-    <Text className="text-sm text-blue-100 mt-1">
-      Validate HireAI or exam premises
-    </Text>
-  </Pressable>
+  />
+</View>
       </View>
 
-      <View className="bg-white rounded-2xl p-5 mb-5">
-        <Text className="text-lg font-bold text-blue-900 mb-4">
+      {/* RECENT NOTIFICATIONS */}
+
+      <View>
+        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
           Recent Notifications
         </Text>
 
         {recentNotifications.length === 0 ? (
-          <Text className="text-sm text-gray-500">No recent notifications</Text>
+          <View className="rounded-[24px] bg-white p-6">
+            <Text className="text-[#667085]">
+              No recent notifications
+            </Text>
+          </View>
         ) : (
           recentNotifications.map((item, index) => (
-            <View key={item._id}>
-              <Pressable
-                onPress={() => router.push("/(protected)/notifications")}
-                className="py-1"
-              >
-                <View className="flex-row items-start justify-between">
-                  <View className="flex-1 pr-3">
-                    <Text className="text-base font-semibold text-gray-900">
-                      {item.title || "Notification"}
-                    </Text>
-                    <Text className="text-sm text-gray-500 mt-1">
-                      {item.body || ""}
-                    </Text>
-                  </View>
+            <Pressable
+              key={item._id}
+              onPress={() =>
+                router.push(
+                  "/(protected)/notifications"
+                )
+              }
+              className="mb-4 rounded-[24px] bg-white p-5"
+            >
+              <View className="flex-row items-start justify-between">
+                <View className="mr-4 flex-1">
+                  <Text className="text-[16px] font-semibold text-[#101828]">
+                    {item.title}
+                  </Text>
 
-                  <Text className="text-xs text-gray-400">
-                    {item.createdAt
-                      ? new Date(item.createdAt).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })
-                      : ""}
+                  <Text className="mt-2 text-[14px] leading-6 text-[#667085]">
+                    {item.body}
                   </Text>
                 </View>
-              </Pressable>
 
-              {index !== recentNotifications.length - 1 && (
-                <View className="h-px bg-gray-200 my-4" />
-              )}
-            </View>
+                <Text className="text-[12px] text-[#98A2B3]">
+                  {item.createdAt
+                    ? new Date(
+                        item.createdAt
+                      ).toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })
+                    : ""}
+                </Text>
+              </View>
+            </Pressable>
           ))
         )}
       </View>
@@ -236,11 +312,42 @@ export default function HomeScreen() {
   );
 }
 
-function StatCard({ title, value }) {
+function ModernStatCard({ title, value }) {
   return (
-    <View className="flex-1 bg-white rounded-2xl p-4 items-center justify-center">
-      <Text className="text-xs text-gray-500 mb-1">{title}</Text>
-      <Text className="text-2xl font-bold text-blue-900">{value}</Text>
+    <View className="flex-1 rounded-[24px] bg-white p-5">
+      <Text className="text-[13px] text-[#667085]">
+        {title}
+      </Text>
+
+      <Text className="mt-3 text-[30px] font-bold text-[#101828]">
+        {value}
+      </Text>
     </View>
+  );
+}
+
+function QuickActionCard({
+  title,
+  subtitle,
+  icon,
+  onPress,
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="mb-4 w-[48%] rounded-[24px] bg-white p-5"
+    >
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
+        {icon}
+      </View>
+
+      <Text className="text-[15px] font-semibold text-[#101828]">
+        {title}
+      </Text>
+
+      <Text className="mt-1 text-[12px] leading-5 text-[#667085]">
+        {subtitle}
+      </Text>
+    </Pressable>
   );
 }

@@ -4,28 +4,12 @@ export default function EventsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: false,
-        headerStyle: {
-          backgroundColor: "#f9fafb",
-        },
-        headerTitleStyle: {
-          fontWeight: "700",
-          fontSize: 18,
-        },
+        headerShown: false,
       }}
     >
-      <Stack.Screen
-        name="index"
-        options={{
-          title: "Events",
-        }}
-      />
-      <Stack.Screen
-        name="[id]"
-        options={{
-          title: "Event Details",
-        }}
-      />
+      <Stack.Screen name="index" />
+
+      <Stack.Screen name="[id]" />
     </Stack>
   );
 }

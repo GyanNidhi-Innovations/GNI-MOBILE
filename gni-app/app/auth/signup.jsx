@@ -337,18 +337,30 @@ export default function SignupScreen() {
   };
 
   const renderPicker = (label, value, onValueChange, items, placeholder) => (
-    <View className="mb-3">
-      <Text className="mb-1 text-sm font-medium text-gray-700">{label}</Text>
-      <View className="rounded-xl border border-gray-300">
-        <Picker selectedValue={value} onValueChange={onValueChange}>
-          <Picker.Item label={placeholder} value="" />
-          {items.map((item) => (
-            <Picker.Item key={item} label={item} value={item} />
-          ))}
-        </Picker>
+      <View className="mb-4">
+        <Text className="mb-2 text-[13px] font-semibold text-[#101828]">
+          {label}
+        </Text>
+
+        <View className="h-[58px] justify-center rounded-[22px] border border-[#5587eb] bg-white px-2">
+          <Picker
+            selectedValue={value}
+            onValueChange={onValueChange}
+            dropdownIconColor="#667085"
+            style={{
+              color: "#101828",
+              height: 58,
+            }}
+          >
+            <Picker.Item label={placeholder} value="" color="#98A2B3" />
+          
+            {items.map((item) => (
+              <Picker.Item key={item} label={item} value={item} color="#101828" />
+            ))}
+          </Picker>
+        </View>
       </View>
-    </View>
-  );
+   );
 
   const renderStepIndicator = () => {
     const labels = ["Type", "Basic", "Details", "Review"];
@@ -362,14 +374,14 @@ export default function SignupScreen() {
           return (
             <View key={label} className="flex-1 items-center">
               <View
-                className={`h-9 w-9 items-center justify-center rounded-full ${
-                  done || active ? "bg-blue-600" : "bg-gray-300"
+                className={`h-11 w-11 items-center justify-center rounded-full ${
+                  done || active ? "bg-[#0F5EFF]" : "bg-[#D0D5DD]"
                 }`}
               >
                 <Text className="font-bold text-white">{current}</Text>
               </View>
               <Text
-                className={`mt-2 text-xs ${active ? "text-blue-600" : "text-gray-500"}`}
+                className={`mt-3 text-[12px] font-medium ${active ? "text-[#0F5EFF]" : "text-[#98A2B3]"}`}
               >
                 {label}
               </Text>
@@ -423,7 +435,8 @@ export default function SignupScreen() {
         onChangeText={(v) =>
           handleChange("name", v.replace(/[^a-zA-Z\s]/g, ""))
         }
-        className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+        placeholderTextColor="#667085"
       />
 
       <TextInput
@@ -432,7 +445,8 @@ export default function SignupScreen() {
         autoCapitalize="none"
         keyboardType="email-address"
         onChangeText={(v) => handleChange("email", v)}
-        className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+        placeholderTextColor="#667085"
       />
 
       <TextInput
@@ -441,7 +455,8 @@ export default function SignupScreen() {
         keyboardType="phone-pad"
         maxLength={10}
         onChangeText={(v) => handleChange("phone", v.replace(/\D/g, ""))}
-        className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+        placeholderTextColor="#667085"
       />
 
       <TextInput
@@ -449,7 +464,8 @@ export default function SignupScreen() {
         value={form.password}
         secureTextEntry
         onChangeText={(v) => handleChange("password", v)}
-        className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+        placeholderTextColor="#667085"
       />
 
       <TextInput
@@ -457,7 +473,8 @@ export default function SignupScreen() {
         value={form.confirmPassword}
         secureTextEntry
         onChangeText={(v) => handleChange("confirmPassword", v)}
-        className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+        placeholderTextColor="#667085"
       />
     </View>
   );
@@ -476,7 +493,8 @@ export default function SignupScreen() {
             onChangeText={(v) =>
               handleChange("college", v.replace(/[^a-zA-Z\s]/g, ""))
             }
-            className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+            className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+            placeholderTextColor="#667085"
           />
 
           {renderPicker(
@@ -510,7 +528,8 @@ export default function SignupScreen() {
               onChangeText={(v) =>
                 handleChange("customBranch", v.replace(/[^a-zA-Z\s]/g, ""))
               }
-              className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+              className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+              placeholderTextColor="#667085"
             />
           )}
 
@@ -521,13 +540,14 @@ export default function SignupScreen() {
             onChangeText={(v) =>
               handleChange("skills", v.replace(/[0-9]/g, ""))
             }
-            className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+            className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+            placeholderTextColor="#667085"
             style={{ minHeight: 90, textAlignVertical: "top" }}
           />
 
           <Pressable
             onPress={pickResume}
-            className="mb-4 rounded-xl border border-dashed border-gray-400 px-4 py-4"
+            className="mb-4 rounded-[24px] border border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-5 py-5"
           >
             <Text className="text-center text-gray-700">
               {resumeFile?.name
@@ -548,9 +568,9 @@ export default function SignupScreen() {
 
           <Pressable
             onPress={pickResume}
-            className="mb-4 rounded-xl border border-dashed border-gray-400 px-4 py-4"
+            className="mb-4 rounded-[24px] border border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-5 py-5"
           >
-            <Text className="text-center text-gray-700">
+            <Text className="text-center text-[#667085]">
               {resumeFile?.name
                 ? `Resume: ${resumeFile.name}`
                 : "Upload Resume *"}
@@ -588,7 +608,8 @@ export default function SignupScreen() {
               onChangeText={(v) =>
                 handleChange("customBranch", v.replace(/[^a-zA-Z\s]/g, ""))
               }
-              className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+              className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+              placeholderTextColor="#667085"
             />
           )}
 
@@ -599,7 +620,8 @@ export default function SignupScreen() {
             onChangeText={(v) =>
               handleChange("skills", v.replace(/[0-9]/g, ""))
             }
-            className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+            className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+            placeholderTextColor="#667085"
             style={{ minHeight: 90, textAlignVertical: "top" }}
           />
         </View>
@@ -616,14 +638,16 @@ export default function SignupScreen() {
           placeholder="Current Company"
           value={form.currentCompany}
           onChangeText={(v) => handleChange("currentCompany", v)}
-          className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+          className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+          placeholderTextColor="#667085"
         />
 
         <TextInput
           placeholder="Current Role"
           value={form.currentRole}
           onChangeText={(v) => handleChange("currentRole", v)}
-          className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+          className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+          placeholderTextColor="#667085"
         />
 
         {renderPicker(
@@ -641,15 +665,16 @@ export default function SignupScreen() {
           onChangeText={(v) =>
             handleChange("skills", v.replace(/[0-9]/g, ""))
           }
-          className="mb-3 rounded-xl border border-gray-300 px-4 py-3"
+          className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
+          placeholderTextColor="#667085"
           style={{ minHeight: 90, textAlignVertical: "top" }}
         />
 
         <Pressable
           onPress={pickResume}
-          className="mb-4 rounded-xl border border-dashed border-gray-400 px-4 py-4"
+          className="mb-4 rounded-[24px] border border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-5 py-5"
         >
-          <Text className="text-center text-gray-700">
+          <Text className="text-center text-[#667085]">
             {resumeFile?.name ? `Resume: ${resumeFile.name}` : "Upload Resume *"}
           </Text>
         </Pressable>
@@ -663,7 +688,7 @@ export default function SignupScreen() {
         Review Details
       </Text>
 
-      <View className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <View className="rounded-[28px] bg-white p-6">
         <Text className="mb-2 text-gray-800">Type: {form.type}</Text>
         <Text className="mb-2 text-gray-800">Name: {form.name}</Text>
         <Text className="mb-2 text-gray-800">Email: {form.email}</Text>
@@ -722,16 +747,21 @@ export default function SignupScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1 bg-[#F6F8FB]"
       contentContainerStyle={{ padding: 24 }}
     >
-      <Text className="mb-2 text-center text-3xl font-bold text-black">
-        Create Account
-      </Text>
+      <View className="mb-8">
+  <Text className="text-[36px] font-bold leading-[44px] text-[#101828]">
+    Create
+    {"\n"}
+    Account
+  </Text>
 
-      <Text className="mb-6 text-center text-gray-500">
-        Join GyanNidhi
-      </Text>
+  <Text className="mt-4 text-[15px] leading-7 text-[#667085]">
+    Join GyanNidhi and access events, placements,
+    HireAI interviews, and smart verification tools.
+  </Text>
+</View>
 
       {renderStepIndicator()}
 
@@ -744,7 +774,7 @@ export default function SignupScreen() {
         {step > 1 ? (
           <Pressable
             onPress={handleBack}
-            className="rounded-xl border border-gray-300 px-5 py-3"
+            className="rounded-[22px] border border-[#D0D5DD] bg-white px-6 py-4"
           >
             <Text className="font-semibold text-gray-700">Back</Text>
           </Pressable>
@@ -755,7 +785,7 @@ export default function SignupScreen() {
         {step < 4 ? (
           <Pressable
             onPress={handleNext}
-            className="rounded-xl bg-blue-600 px-5 py-3"
+            className="rounded-[22px] bg-[#0F5EFF] px-6 py-4"
           >
             <Text className="font-semibold text-white">Next</Text>
           </Pressable>
@@ -763,7 +793,7 @@ export default function SignupScreen() {
           <Pressable
             onPress={handleSignup}
             disabled={loading}
-            className="rounded-xl bg-blue-600 px-5 py-3"
+            className="rounded-[22px] bg-[#0F5EFF] px-6 py-4"
           >
             <Text className="font-semibold text-white">
               {loading ? "Creating..." : "Submit"}
@@ -773,7 +803,7 @@ export default function SignupScreen() {
       </View>
 
       <Pressable onPress={() => router.push("/auth/login")}>
-        <Text className="mt-6 text-center text-blue-600">
+        <Text className="mt-8 text-center text-[14px] font-semibold text-[#0F5EFF]">
           Already have an account? Login
         </Text>
       </Pressable>

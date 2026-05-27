@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, ActivityIndicator, Alert, Text, Pressable } from "react-native";
+import {
+  View,
+  ActivityIndicator,
+  Alert,
+  Text,
+  Pressable,
+  ScrollView,
+} from "react-native";
 import { router } from "expo-router";
 import { Calendar } from "react-native-calendars";
+import { Ionicons } from "@expo/vector-icons";
+
 import { apiClient } from "@/services/apiClient";
 
 export default function CalendarScreen() {
@@ -33,9 +42,7 @@ export default function CalendarScreen() {
 
       const dateKey = new Date(event.date).toISOString().split("T")[0];
 
-      if (!map[dateKey]) {
-        map[dateKey] = [];
-      }
+      if (!map[dateKey]) map[dateKey] = [];
 
       map[dateKey].push(event);
     });
@@ -49,7 +56,7 @@ export default function CalendarScreen() {
     Object.keys(eventsByDate).forEach((dateKey) => {
       marks[dateKey] = {
         marked: true,
-        dotColor: "#2563eb",
+        dotColor: "#0F5EFF",
       };
     });
 
@@ -57,8 +64,8 @@ export default function CalendarScreen() {
       marks[selectedDate] = {
         ...(marks[selectedDate] || {}),
         selected: true,
-        selectedColor: "#2563eb",
-        selectedTextColor: "#ffffff",
+        selectedColor: "#0F5EFF",
+        selectedTextColor: "#FFFFFF",
       };
     }
 
@@ -66,10 +73,6 @@ export default function CalendarScreen() {
   }, [eventsByDate, selectedDate]);
 
   const selectedEvents = selectedDate ? eventsByDate[selectedDate] || [] : [];
-
-  const handleDayPress = (day) => {
-    setSelectedDate(day.dateString);
-  };
 
   const handleOpenEvent = (event) => {
     if (!event?._id) {
@@ -86,92 +89,141 @@ export default function CalendarScreen() {
     });
   };
 
+  const readableSelectedDate = selectedDate
+    ? new Date(selectedDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-100">
-        <ActivityIndicator size="small" color="#2563eb" />
+      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
+        <ActivityIndicator size="small" color="#0F5EFF" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-gray-100 p-5">
-      <View className="bg-white rounded-2xl overflow-hidden">
-        <Calendar
-  markedDates={markedDates}
-  onDayPress={handleDayPress}
-  renderHeader={(date) => {
-    const monthOnly = new Date(date).toLocaleDateString(undefined, {
-      month: "long",
-    });
+    <ScrollView
+      className="flex-1 bg-[#F6F8FB]"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingTop: 24,
+        paddingBottom: 120,
+      }}
+    >
+      <View className="mb-7">
+        <Text className="text-[32px] font-bold text-[#101828]">Calendar</Text>
 
-    return (
-      <Text className="text-lg font-bold text-gray-900 py-3">
-        {monthOnly}
-      </Text>
-    );
-  }}
-  theme={{
-    backgroundColor: "#ffffff",
-    calendarBackground: "#ffffff",
-    textSectionTitleColor: "#6b7280",
-    selectedDayBackgroundColor: "#2563eb",
-    selectedDayTextColor: "#ffffff",
-    todayTextColor: "#2563eb",
-    dayTextColor: "#111827",
-    textDisabledColor: "#d1d5db",
-    monthTextColor: "#111827",
-    arrowColor: "#2563eb",
-    textMonthFontWeight: "700",
-    textDayFontWeight: "500",
-    textDayHeaderFontWeight: "600",
-  }}
-/>
+        <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
+          Track upcoming events and open details directly from selected dates.
+        </Text>
       </View>
 
-      <View className="mt-4 bg-white rounded-2xl p-4">
+      <View className="overflow-hidden rounded-[30px] bg-white p-3">
+        <Calendar
+          markedDates={markedDates}
+          onDayPress={(day) => setSelectedDate(day.dateString)}
+          renderHeader={(date) => {
+            const monthOnly = new Date(date).toLocaleDateString(undefined, {
+              month: "long",
+              year: "numeric",
+            });
+
+            return (
+              <Text className="py-4 text-[20px] font-bold text-[#101828]">
+                {monthOnly}
+              </Text>
+            );
+          }}
+          theme={{
+            backgroundColor: "#FFFFFF",
+            calendarBackground: "#FFFFFF",
+            textSectionTitleColor: "#98A2B3",
+            selectedDayBackgroundColor: "#0F5EFF",
+            selectedDayTextColor: "#FFFFFF",
+            todayTextColor: "#0F5EFF",
+            dayTextColor: "#101828",
+            textDisabledColor: "#D0D5DD",
+            monthTextColor: "#101828",
+            arrowColor: "#0F5EFF",
+            textMonthFontWeight: "700",
+            textDayFontWeight: "500",
+            textDayHeaderFontWeight: "700",
+            textDayFontSize: 15,
+            textDayHeaderFontSize: 12,
+          }}
+        />
+      </View>
+
+      <View className="mt-6">
+        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
+          {selectedDate ? readableSelectedDate : "Selected Events"}
+        </Text>
+
         {!selectedDate ? (
-          <Text className="text-sm text-gray-600">
-            Tap a highlighted date to see events.
-          </Text>
-        ) : selectedEvents.length === 0 ? (
-          <>
-            <Text className="text-base font-semibold text-gray-900 mb-2">
-              {new Date(selectedDate).toLocaleDateString()}
-            </Text>
-            <Text className="text-sm text-gray-600">
-              No events scheduled for this date.
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text className="text-base font-semibold text-gray-900 mb-3">
-              {new Date(selectedDate).toLocaleDateString()}
+          <View className="rounded-[28px] bg-white p-6">
+            <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
+              <Ionicons name="calendar-outline" size={22} color="#0F5EFF" />
+            </View>
+
+            <Text className="text-[16px] font-semibold text-[#101828]">
+              Pick a highlighted date
             </Text>
 
-            {selectedEvents.map((event, index) => (
-              <View key={event._id}>
-                <Pressable
-                  onPress={() => handleOpenEvent(event)}
-                  className="py-3"
-                >
-                  <Text className="text-base font-medium text-blue-700">
+            <Text className="mt-2 text-[14px] leading-6 text-[#667085]">
+              Dates with a blue dot have scheduled events.
+            </Text>
+          </View>
+        ) : selectedEvents.length === 0 ? (
+          <View className="rounded-[28px] bg-white p-6">
+            <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#F2F4F7]">
+              <Ionicons name="calendar-clear-outline" size={22} color="#667085" />
+            </View>
+
+            <Text className="text-[16px] font-semibold text-[#101828]">
+              No events scheduled
+            </Text>
+
+            <Text className="mt-2 text-[14px] leading-6 text-[#667085]">
+              There are no events for this date.
+            </Text>
+          </View>
+        ) : (
+          selectedEvents.map((event) => (
+            <Pressable
+              key={event._id}
+              onPress={() => handleOpenEvent(event)}
+              className="mb-4 rounded-[28px] bg-white p-5"
+            >
+              <View className="flex-row items-start">
+                <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
+                  <Ionicons name="calendar-outline" size={20} color="#0F5EFF" />
+                </View>
+
+                <View className="flex-1">
+                  <Text className="text-[16px] font-semibold text-[#101828]">
                     {event.title || "Untitled Event"}
                   </Text>
 
-                  <Text className="text-sm text-gray-500 mt-1">
-                    {event.location || "-"}
+                  <Text className="mt-2 text-[14px] text-[#667085]">
+                    {event.location || "Online"}
                   </Text>
-                </Pressable>
 
-                {index !== selectedEvents.length - 1 && (
-                  <View className="h-px bg-gray-200" />
-                )}
+                  <Text className="mt-3 text-[12px] font-semibold text-[#0F5EFF]">
+                    View details
+                  </Text>
+                </View>
+
+                <Ionicons name="chevron-forward" size={18} color="#98A2B3" />
               </View>
-            ))}
-          </>
+            </Pressable>
+          ))
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
