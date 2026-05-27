@@ -6,6 +6,7 @@ import {
   sendToUser,
   sendToTopic,
   getUnreadCount,
+  sendToAllUsers,
 } from "../controllers/notificationController.js";
 
 const router = express.Router();
@@ -16,5 +17,6 @@ router.patch("/:id/read", markNotificationRead);
 router.post("/send", sendToUser);
 router.post("/send-topic", sendToTopic);
 router.get("/unread/:userId", getUnreadCount);
+router.post("/send-all", sendToAllUsers);
 
 export default router;

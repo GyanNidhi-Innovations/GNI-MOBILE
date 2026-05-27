@@ -254,3 +254,100 @@ export async function getUnreadCount(req, res) {
     });
   }
 }
+
+export async function sendToAllUsers(req, res) {
+  try {
+    const { title, body, type = "system", data = {} } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({
+        success: false,
+        message: "title and body are required",
+      });
+    }
+
+    const tokens = await NotificationToken.find({ isActive: true }).lean();
+
+    if (!tokens.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No active notification tokens found",
+      });
+    }
+
+    const messages = tokens.map((item) => ({
+      token: item.token,
+      notification: {
+        title,
+        body,
+      },
+      data: Object.fromEntries(
+        Object.entries({
+          ...data,
+          type,
+          screen: data.screen || "notifications",
+        }).map(([key, value]) => [key, String(value)])
+      ),
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "default",
+          sound: "default",
+        },
+      },
+    }));
+
+    const batches = [];
+    for (let i = 0; i < messages.length; i += 500) {
+      batches.push(messages.slice(i, i + 500));
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+    const failedTokens = [];
+
+    for (const batch of batches) {
+      const response = await admin.messaging().sendEach(batch);
+
+      response.responses.forEach((result, index) => {
+        if (result.success) {
+          successCount += 1;
+        } else {
+          failureCount += 1;
+          failedTokens.push({
+            token: batch[index].token,
+            error: result.error?.code || result.error?.message,
+          });
+        }
+      });
+    }
+
+    await Notification.insertMany(
+      tokens.map((item) => ({
+        userId: item.userId,
+        title,
+        body,
+        type,
+        data,
+        deliveryStatus: "sent",
+        read: false,
+        sentAt: new Date(),
+      }))
+    );
+
+    return res.json({
+      success: true,
+      message: "Notification sent to all users",
+      totalTokens: tokens.length,
+      successCount,
+      failureCount,
+      failedTokens,
+    });
+  } catch (error) {
+    console.error("sendToAllUsers error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
