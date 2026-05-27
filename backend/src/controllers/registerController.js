@@ -1,6 +1,7 @@
 // src/controllers/registerController.js
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { uploadResumeToSpaces } from "../services/spacesService.js";
 import Registration from "../models/Registration.js";
 
@@ -62,9 +63,22 @@ export const loginRegistrationUser = async (req, res) => {
       });
     }
 
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        type: user.type,
+      },
+      process.env.JWT_SECRET || "gni_mobile_secret_key",
+      {
+        expiresIn: "30d",
+      }
+);
+
     return res.status(200).json({
       success: true,
       message: "Login successful",
+      token,
       user: {
         id: user._id,
         type: user.type,
