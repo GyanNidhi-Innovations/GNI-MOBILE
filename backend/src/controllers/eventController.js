@@ -1,5 +1,84 @@
 import mongoose from "mongoose";
 import Event from "../models/Event.js";
+import NotificationToken from "../models/NotificationToken.js";
+import Notification from "../models/Notification.js";
+import { admin } from "../config/firebaseAdmin.js";
+
+export const createEvent = async (req, res) => {
+  try {
+    const event = await Event.create(req.body);
+
+    const tokens = await NotificationToken.find({ isActive: true }).lean();
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    if (tokens.length > 0) {
+      const messages = tokens.map((item) => ({
+        token: item.token,
+        notification: {
+          title: "New Event",
+          body: `${event.title} is now available. Register now.`,
+        },
+        data: {
+          type: "event",
+          screen: "events",
+          eventId: String(event._id),
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "default",
+            sound: "default",
+          },
+        },
+      }));
+
+      for (let i = 0; i < messages.length; i += 500) {
+        const batch = messages.slice(i, i + 500);
+        const response = await admin.messaging().sendEach(batch);
+
+        successCount += response.successCount;
+        failureCount += response.failureCount;
+      }
+
+      await Notification.insertMany(
+        tokens.map((item) => ({
+          userId: item.userId,
+          title: "New Event",
+          body: `${event.title} is now available. Register now.`,
+          type: "event",
+          data: {
+            screen: "events",
+            eventId: String(event._id),
+          },
+          deliveryStatus: "sent",
+          read: false,
+          sentAt: new Date(),
+        }))
+      );
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Event created and notification sent",
+      event,
+      notification: {
+        totalTokens: tokens.length,
+        successCount,
+        failureCount,
+      },
+    });
+  } catch (error) {
+    console.error("createEvent error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while creating event",
+      error: error.message,
+    });
+  }
+};
 
 export const getEvents = async (req, res) => {
   try {
