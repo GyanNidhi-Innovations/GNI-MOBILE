@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   ActivityIndicator,
   Alert,
@@ -12,6 +11,12 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
+
+import AppScreen from "@/components/common/AppScreen";
+
+import {
+  COLORS,
+} from "@/theme";
 
 export default function ProfileScreen() {
   const authUser = useAuthStore((state) => state.user);
@@ -87,21 +92,25 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
-        <ActivityIndicator size="small" color="#0F5EFF" />
-      </View>
+      <AppScreen
+  contentStyle={{
+    paddingTop: 8,
+    paddingBottom: 120,
+  }}
+>
+    </AppScreen>
     );
   }
 
-  if (!user) {
-    return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB] px-8">
-        <Text className="text-center text-[16px] text-[#667085]">
-          No user data found
-        </Text>
-      </View>
-    );
-  }
+if (!user) {
+  return (
+    <AppScreen centered scroll={false}>
+      <Text className="text-center text-[16px] text-[#667085]">
+        No user data found
+      </Text>
+    </AppScreen>
+  );
+}
 
   const initials = user?.name
     ? user.name
@@ -112,16 +121,12 @@ export default function ProfileScreen() {
         .toUpperCase()
     : "U";
 
-  return (
-    <ScrollView
-      className="flex-1 bg-[#F6F8FB]"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: 24,
-        paddingBottom: 120,
-      }}
-    >
+return (
+  <AppScreen
+    contentStyle={{
+      paddingBottom: 120,
+    }}
+  >
       <View className="mb-7">
         <Text className="text-[32px] font-bold text-[#101828]">Profile</Text>
         <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
@@ -242,7 +247,7 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </Pressable>
-    </ScrollView>
+</AppScreen>
   );
 }
 

@@ -7,10 +7,9 @@ import {
   Pressable,
   Alert,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ExamPremisesScreen() {
   const [attempt, setAttempt] = useState("");
@@ -48,35 +47,31 @@ export default function ExamPremisesScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-[#F6F8FB]"
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 32,
-          paddingBottom: 40,
-        }}
-      >
-        <Pressable
+    <SafeAreaView className="flex-1 bg-[#F6F8FB]" edges={["top", "bottom"]}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: 40,
+          }}
+        >
+        {/* <Pressable
           onPress={() => router.back()}
-          className="mb-8 h-11 w-11 items-center justify-center rounded-full bg-white"
+          className="mb-5 h-11 w-11 items-center justify-center rounded-full bg-white"
         >
           <Ionicons name="chevron-back" size={22} color="#101828" />
-        </Pressable>
+        </Pressable> */}
 
-        <View className="mb-8">
+        <View className="mb-6 ">
           <Text className="text-[34px] font-bold leading-[42px] text-[#101828]">
-            Exam
-            {"\n"}
-            Premises Check
+            Exam{"\n"}Premises Check
           </Text>
 
           <Text className="mt-4 text-[15px] leading-7 text-[#667085]">
-            Scan the exam QR code for faster setup, or enter session details
-            manually to continue camera validation.
+            Scan the exam QR code for faster setup. The app will detect the
+            attempt and premises session details automatically.
           </Text>
         </View>
 
@@ -93,8 +88,8 @@ export default function ExamPremisesScreen() {
           </Text>
 
           <Text className="mt-3 text-[14px] leading-6 text-blue-100">
-            Recommended method. Automatically detects attempt and premises
-            session details.
+            Recommended method. Opens the camera scanner and continues to
+            premises validation after QR detection.
           </Text>
 
           <View className="mt-5 flex-row items-center">
@@ -105,67 +100,7 @@ export default function ExamPremisesScreen() {
           </View>
         </Pressable>
 
-        {/* <View className="mb-5 flex-row items-center">
-          <View className="h-px flex-1 bg-[#D0D5DD]" />
-          <Text className="mx-4 text-[13px] font-medium text-[#98A2B3]">
-            Or enter manually
-          </Text>
-          <View className="h-px flex-1 bg-[#D0D5DD]" />
-        </View> */}
-
-        {/* <View className="rounded-[30px] bg-white p-6">
-          <ModernInput
-            label="Attempt ID"
-            value={attempt}
-            onChangeText={setAttempt}
-            placeholder="Enter attempt ID"
-            icon="document-text-outline"
-          />
-
-          <ModernInput
-            label="Room"
-            value={room}
-            onChangeText={setRoom}
-            placeholder="premises-xxxx-prem"
-            icon="business-outline"
-          />
-
-          <ModernInput
-            label="Session ID"
-            value={sessionId}
-            onChangeText={setSessionId}
-            placeholder="Enter session ID"
-            icon="key-outline"
-          />
-
-          <ModernInput
-            label="Exam ID"
-            value={examId}
-            onChangeText={setExamId}
-            placeholder="Enter exam ID"
-            icon="reader-outline"
-          />
-
-          <ModernInput
-            label="Candidate Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="candidate@example.com"
-            icon="mail-outline"
-            keyboardType="email-address"
-          />
-
-          <Pressable
-            onPress={handleContinue}
-            className="mt-2 rounded-[22px] bg-[#0F5EFF] px-5 py-4"
-          >
-            <Text className="text-center text-[16px] font-semibold text-white">
-              Continue to Camera
-            </Text>
-          </Pressable>
-        </View> */}
-
-        <View className="mt-6 rounded-[24px] bg-white p-5">
+        <View className="mt-auto rounded-[24px] bg-white p-5">
           <View className="flex-row items-start">
             <View className="mr-4 h-11 w-11 items-center justify-center rounded-2xl bg-[#EEF4FF]">
               <Ionicons
@@ -182,7 +117,7 @@ export default function ExamPremisesScreen() {
           </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

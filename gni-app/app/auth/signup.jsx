@@ -12,6 +12,10 @@ import * as DocumentPicker from "expo-document-picker";
 import { router } from "expo-router";
 import { signupUserApi } from "../../src/services/authService";
 
+import AppScreen from "../../src/components/common/AppScreen";
+import AppButton from "../../src/components/ui/AppButton";
+import AppInput from "../../src/components/ui/AppInput";
+
 const joiningYearOptions = Array.from({ length: 27 }, (_, i) =>
   String(2000 + i),
 );
@@ -429,53 +433,54 @@ export default function SignupScreen() {
         Basic Details
       </Text>
 
-      <TextInput
-        placeholder="Full Name"
-        value={form.name}
-        onChangeText={(v) =>
-          handleChange("name", v.replace(/[^a-zA-Z\s]/g, ""))
-        }
-        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-        placeholderTextColor="#667085"
-      />
+<AppInput
+  label="Full Name"
+  icon="person-outline"
+  placeholder="Full Name"
+  value={form.name}
+  onChangeText={(v) =>
+    handleChange("name", v.replace(/[^a-zA-Z\s]/g, ""))
+  }
+/>
 
-      <TextInput
-        placeholder="Email"
-        value={form.email}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        onChangeText={(v) => handleChange("email", v)}
-        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-        placeholderTextColor="#667085"
-      />
+<AppInput
+  label="Email"
+  icon="mail-outline"
+  placeholder="Email"
+  value={form.email}
+  keyboardType="email-address"
+  onChangeText={(v) => handleChange("email", v)}
+/>
+<AppInput
+  label="Phone Number"
+  icon="call-outline"
+  placeholder="Phone Number"
+  value={form.phone}
+  keyboardType="phone-pad"
+  onChangeText={(v) =>
+    handleChange("phone", v.replace(/\D/g, ""))
+  }
+/>
 
-      <TextInput
-        placeholder="Phone Number"
-        value={form.phone}
-        keyboardType="phone-pad"
-        maxLength={10}
-        onChangeText={(v) => handleChange("phone", v.replace(/\D/g, ""))}
-        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-        placeholderTextColor="#667085"
-      />
+<AppInput
+  label="Password"
+  icon="lock-closed-outline"
+  placeholder="Password"
+  value={form.password}
+  secureTextEntry
+  onChangeText={(v) => handleChange("password", v)}
+/>
 
-      <TextInput
-        placeholder="Password"
-        value={form.password}
-        secureTextEntry
-        onChangeText={(v) => handleChange("password", v)}
-        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-        placeholderTextColor="#667085"
-      />
-
-      <TextInput
-        placeholder="Confirm Password"
-        value={form.confirmPassword}
-        secureTextEntry
-        onChangeText={(v) => handleChange("confirmPassword", v)}
-        className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-        placeholderTextColor="#667085"
-      />
+<AppInput
+  label="Confirm Password"
+  icon="shield-checkmark-outline"
+  placeholder="Confirm Password"
+  value={form.confirmPassword}
+  secureTextEntry
+  onChangeText={(v) =>
+    handleChange("confirmPassword", v)
+  }
+/>
     </View>
   );
 
@@ -487,16 +492,18 @@ export default function SignupScreen() {
             Student Details
           </Text>
 
-          <TextInput
-            placeholder="College Name"
-            value={form.college}
-            onChangeText={(v) =>
-              handleChange("college", v.replace(/[^a-zA-Z\s]/g, ""))
-            }
-            className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-            placeholderTextColor="#667085"
-          />
-
+          <AppInput
+  label="College Name"
+  icon="school-outline"
+  placeholder="College Name"
+  value={form.college}
+  onChangeText={(v) =>
+    handleChange(
+      "college",
+      v.replace(/[^a-zA-Z\s]/g, "")
+    )
+  }
+/>
           {renderPicker(
             "Year of Study *",
             form.year,
@@ -634,20 +641,24 @@ export default function SignupScreen() {
           Professional Details
         </Text>
 
-        <TextInput
+        <AppInput
+          label="Current Company"
+          icon="business-outline"
           placeholder="Current Company"
           value={form.currentCompany}
-          onChangeText={(v) => handleChange("currentCompany", v)}
-          className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-          placeholderTextColor="#667085"
+          onChangeText={(v) =>
+            handleChange("currentCompany", v)
+          }
         />
 
-        <TextInput
+        <AppInput
+          label="Current Role"
+          icon="briefcase-outline"
           placeholder="Current Role"
           value={form.currentRole}
-          onChangeText={(v) => handleChange("currentRole", v)}
-          className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-          placeholderTextColor="#667085"
+          onChangeText={(v) =>
+            handleChange("currentRole", v)
+          }
         />
 
         {renderPicker(
@@ -658,17 +669,19 @@ export default function SignupScreen() {
           "Select experience",
         )}
 
-        <TextInput
-          placeholder="Skills / Interests"
-          value={form.skills}
-          multiline
-          onChangeText={(v) =>
-            handleChange("skills", v.replace(/[0-9]/g, ""))
-          }
-          className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-          placeholderTextColor="#667085"
-          style={{ minHeight: 90, textAlignVertical: "top" }}
-        />
+       <AppInput
+         label="Skills / Interests"
+         icon="bulb-outline"
+         placeholder="Skills / Interests"
+         value={form.skills}
+         multiline
+         onChangeText={(v) =>
+           handleChange(
+             "skills",
+             v.replace(/[0-9]/g, "")
+           )
+         }
+       />
 
         <Pressable
           onPress={pickResume}
@@ -745,68 +758,56 @@ export default function SignupScreen() {
     </View>
   );
 
-  return (
-    <ScrollView
-      className="flex-1 bg-[#F6F8FB]"
-      contentContainerStyle={{ padding: 24 }}
-    >
-      <View className="mb-8">
-  <Text className="text-[36px] font-bold leading-[44px] text-[#101828]">
-    Create
-    {"\n"}
-    Account
-  </Text>
+return (
+  <AppScreen>
+        <View className="mb-8">
+          <Text className="text-[36px] font-bold leading-[44px] text-[#101828]">
+            Create{"\n"}Account
+          </Text>
 
-  <Text className="mt-4 text-[15px] leading-7 text-[#667085]">
-    Join GyanNidhi and access events, placements,
-    HireAI interviews, and smart verification tools.
-  </Text>
-</View>
+          <Text className="mt-4 text-[15px] leading-7 text-[#667085]">
+            Join GyanNidhi and access events, placements,
+            HireAI interviews, and smart verification tools.
+          </Text>
+        </View>
 
-      {renderStepIndicator()}
+        {renderStepIndicator()}
 
-      {step === 1 && renderStep1()}
-      {step === 2 && renderStep2()}
-      {step === 3 && renderStep3()}
-      {step === 4 && renderStep4()}
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+        {step === 4 && renderStep4()}
 
-      <View className="mt-6 flex-row justify-between">
-        {step > 1 ? (
-          <Pressable
-            onPress={handleBack}
-            className="rounded-[22px] border border-[#D0D5DD] bg-white px-6 py-4"
-          >
-            <Text className="font-semibold text-gray-700">Back</Text>
-          </Pressable>
-        ) : (
-          <View />
-        )}
+        <View className="mt-6 flex-row justify-between">
+          {step > 1 ? (
+            <AppButton
+              title="Back"
+              variant="secondary"
+              onPress={handleBack}
+            />
+          ) : (
+            <View />
+          )}
 
-        {step < 4 ? (
-          <Pressable
-            onPress={handleNext}
-            className="rounded-[22px] bg-[#0F5EFF] px-6 py-4"
-          >
-            <Text className="font-semibold text-white">Next</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={handleSignup}
-            disabled={loading}
-            className="rounded-[22px] bg-[#0F5EFF] px-6 py-4"
-          >
-            <Text className="font-semibold text-white">
-              {loading ? "Creating..." : "Submit"}
-            </Text>
-          </Pressable>
-        )}
-      </View>
+          {step < 4 ? (
+            <AppButton
+             title="Next"
+             onPress={handleNext}
+           />
+          ) : (
+            <AppButton
+               title={loading ? "Creating..." : "Submit"}
+               loading={loading}
+               onPress={handleSignup}
+             />
+          )}
+        </View>
 
-      <Pressable onPress={() => router.push("/auth/login")}>
-        <Text className="mt-8 text-center text-[14px] font-semibold text-[#0F5EFF]">
-          Already have an account? Login
-        </Text>
-      </Pressable>
-    </ScrollView>
-  );
+        <Pressable onPress={() => router.push("/auth/login")}>
+          <Text className="mt-8 text-center text-[14px] font-semibold text-[#0F5EFF]">
+            Already have an account? Login
+          </Text>
+        </Pressable>
+      </AppScreen>
+);
 }

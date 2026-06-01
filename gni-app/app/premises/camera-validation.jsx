@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useLocalSearchParams, router } from "expo-router";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import {
   View,
   Text,
@@ -15,14 +15,23 @@ import {
   uploadExamPremisesSegment,
   startExamPremisesMerge,
   getExamPremisesLiveStatus,
+  uploadHireAIPremisesChunk,
+  finalizeHireAIPremisesRecording,
 } from "../../src/services/premisesService";
+import { startHireAIPremisesLiveStream } from "../../src/services/premisesWebRTCService";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 
 export default function CameraValidationScreen() {
   const cameraRef = useRef(null);
   const recordingPromiseRef = useRef(null);
   const examStatusPollRef = useRef(null);
   const autoStopTriggeredRef = useRef(false);
+  const hireAiRecordingPromiseRef = useRef(null);
+  const hireAiAttemptIdRef = useRef(null);
+  const hireAiLiveRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   const params = useLocalSearchParams();
 
@@ -33,6 +42,8 @@ export default function CameraValidationScreen() {
   const [recordingUploadStatus, setRecordingUploadStatus] = useState("");
   const [cameraMode, setCameraMode] = useState("picture");
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
+  
 
   const mode = String(params.mode || "");
   const room = String(params.room || "");
@@ -40,6 +51,8 @@ export default function CameraValidationScreen() {
   const sessionId = String(params.session_id || "");
   const examId = String(params.examId || params.exam_id || "");
   const email = String(params.email || "");
+  const candidateId = String(params.candidate_id || "");
+  
 
   const validationPassed = !!result?.validated;
 
@@ -105,6 +118,24 @@ export default function CameraValidationScreen() {
         if (mode === "exam") {
           await switchCameraMode("video");
           await handleStartRecording();
+        }
+        if (mode === "hireai") {
+          await switchCameraMode("video");
+
+          const live = await startHireAIPremisesLiveStream({
+            room,
+            candidateId,
+          });
+          console.log("Starting HireAI live stream", {
+            room,
+            candidateId,
+          });
+          console.log("HireAI live stream started");
+
+
+          hireAiLiveRef.current = live;
+        
+          await handleStartHireAIRecording();
         }
       } else {
         Alert.alert(
@@ -202,6 +233,58 @@ const startExamStatusPolling = () => {
     }
   };
 
+  const handleStartHireAIRecording = async () => {
+      try {
+        if (isRecording) return;
+      
+        if (!cameraRef.current) {
+          setRecordingUploadStatus("Camera not ready.");
+          return;
+        }
+      
+        if (!isCameraReady) {
+          setRecordingUploadStatus("Camera still preparing.");
+          return;
+        }
+      
+        const attemptId =
+          `${candidateId || "candidate"}_${Date.now()}`;
+      
+        hireAiAttemptIdRef.current = attemptId;
+        
+                if (!microphonePermission?.granted) {
+  const micResult = await requestMicrophonePermission();
+
+  if (!micResult?.granted) {
+    Alert.alert(
+      "Microphone Permission Required",
+      "Please allow microphone permission to record premises video."
+    );
+    return;
+  }
+}
+        setIsRecording(true);
+      
+        setRecordingUploadStatus(
+          "HireAI premises recording started..."
+        );
+      
+        hireAiRecordingPromiseRef.current =
+        
+          cameraRef.current.recordAsync({
+            maxDuration: 3600,
+          });
+      } catch (error) {
+        console.log("HireAI recording start error:", error);
+      
+        setIsRecording(false);
+      
+        setRecordingUploadStatus(
+          error?.message || "Failed to start recording."
+        );
+      }
+    };
+
   const handleStopRecording = async (fromAutoStop = false) => {
     if (!isRecording) return;
 
@@ -260,9 +343,81 @@ if (!fromAutoStop) {
     }
   };
 
+  const handleStopHireAIRecording = async () => {
+  if (!isRecording) return;
+
+  try {
+    setRecordingUploadStatus(
+      "Stopping HireAI recording..."
+    );
+
+    cameraRef.current?.stopRecording?.();
+
+    const video =
+      await hireAiRecordingPromiseRef.current;
+
+    if (!video?.uri) {
+      setRecordingUploadStatus(
+        "No recording file generated."
+      );
+      return;
+    }
+
+    setRecordingUploadStatus(
+      "Uploading HireAI recording..."
+    );
+
+    await uploadHireAIPremisesChunk({
+      candidateId,
+      attemptId: hireAiAttemptIdRef.current,
+      videoUri: video.uri,
+      chunkIndex: 1,
+    });
+
+    setRecordingUploadStatus(
+      "Finalizing HireAI premises video..."
+    );
+
+    const result =
+      await finalizeHireAIPremisesRecording({
+        candidateId,
+        attemptId: hireAiAttemptIdRef.current,
+      });
+
+    console.log("HireAI finalize result:", result);
+
+    setRecordingUploadStatus(
+      "HireAI premises recording uploaded successfully."
+    );
+  } catch (error) {
+    console.log("HireAI stop/upload error:", error);
+
+    setRecordingUploadStatus(
+      error?.response?.data?.detail ||
+        error?.message ||
+        "HireAI upload failed."
+    );
+  } finally {
+      try {
+      hireAiLiveRef.current?.stop?.();
+    } catch {}    
+
+    hireAiLiveRef.current = null;
+    setIsRecording(false);
+    hireAiRecordingPromiseRef.current = null;
+  }
+};
+
   const handleBack = () => {
     if (isRecording) {
-      handleStopRecording();
+      if (mode === "exam") {
+        handleStopRecording();
+      }   
+
+      if (mode === "hireai") {
+        handleStopHireAIRecording();
+      }   
+
       return;
     }
 
@@ -329,7 +484,14 @@ return (
 
     {/* TOP HEADER */}
 
-    <View className="absolute left-5 right-5 top-12">
+    <View
+  style={{
+    position: "absolute",
+    left: 20,
+    right: 20,
+    top: insets.top + 8,
+  }}
+>
       <View className="flex-row items-center justify-between">
         <Pressable
           onPress={handleBack}
@@ -378,7 +540,20 @@ return (
 
     {/* BOTTOM SHEET */}
 
-    <View className="absolute bottom-0 left-0 right-0 rounded-t-[34px] bg-white px-5 pb-8 pt-6">
+    <View
+  style={{
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "white",
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: insets.bottom + 24,
+  }}
+>
       {/* VALIDATION STATUS */}
 
       {result && (
@@ -475,13 +650,25 @@ return (
 
       {/* RECORDING BUTTON */}
 
-      {mode === "exam" && validationPassed && (
+      {validationPassed && (
         <Pressable
-          onPress={
-            isRecording
-              ? handleStopRecording
-              : handleStartRecording
-          }
+          onPress={() => {
+            if (mode === "exam") {
+              if (isRecording) {
+                handleStopRecording();
+              } else {
+                handleStartRecording();
+              }
+            }
+          
+            if (mode === "hireai") {
+              if (isRecording) {
+                handleStopHireAIRecording();
+              } else {
+                handleStartHireAIRecording();
+              }
+            }
+          }}
           className={`mt-4 rounded-[24px] px-5 py-4 ${
             isRecording
               ? "bg-[#D92D20]"

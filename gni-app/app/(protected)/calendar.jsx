@@ -5,7 +5,6 @@ import {
   Alert,
   Text,
   Pressable,
-  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
 import { Calendar } from "react-native-calendars";
@@ -13,10 +12,18 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { apiClient } from "@/services/apiClient";
 
+import AppScreen from "@/components/common/AppScreen";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  COLORS,
+} from "@/theme";
+
 export default function CalendarScreen() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchCalendarEvents = async () => {
@@ -56,7 +63,7 @@ export default function CalendarScreen() {
     Object.keys(eventsByDate).forEach((dateKey) => {
       marks[dateKey] = {
         marked: true,
-        dotColor: "#0F5EFF",
+        dotColor: COLORS.primary,
       };
     });
 
@@ -64,8 +71,8 @@ export default function CalendarScreen() {
       marks[selectedDate] = {
         ...(marks[selectedDate] || {}),
         selected: true,
-        selectedColor: "#0F5EFF",
-        selectedTextColor: "#FFFFFF",
+        selectedColor: COLORS.primary,
+        selectedTextColor: COLORS.white,
       };
     }
 
@@ -96,25 +103,24 @@ export default function CalendarScreen() {
         year: "numeric",
       })
     : null;
-
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
-        <ActivityIndicator size="small" color="#0F5EFF" />
-      </View>
-    );
-  }
+if (loading) {
+  return (
+    <AppScreen centered scroll={false}>
+      <ActivityIndicator
+        size="small"
+        color={COLORS.primary}
+      />
+    </AppScreen>
+  );
+}
 
   return (
-    <ScrollView
-      className="flex-1 bg-[#F6F8FB]"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: 24,
-        paddingBottom: 120,
-      }}
-    >
+  <AppScreen
+    contentStyle={{
+  paddingTop: 8,
+  paddingBottom: 120,
+}}
+  >
       <View className="mb-7">
         <Text className="text-[32px] font-bold text-[#101828]">Calendar</Text>
 
@@ -140,22 +146,26 @@ export default function CalendarScreen() {
             );
           }}
           theme={{
-            backgroundColor: "#FFFFFF",
-            calendarBackground: "#FFFFFF",
-            textSectionTitleColor: "#98A2B3",
-            selectedDayBackgroundColor: "#0F5EFF",
-            selectedDayTextColor: "#FFFFFF",
-            todayTextColor: "#0F5EFF",
-            dayTextColor: "#101828",
-            textDisabledColor: "#D0D5DD",
-            monthTextColor: "#101828",
-            arrowColor: "#0F5EFF",
-            textMonthFontWeight: "700",
-            textDayFontWeight: "500",
-            textDayHeaderFontWeight: "700",
-            textDayFontSize: 15,
-            textDayHeaderFontSize: 12,
-          }}
+  backgroundColor: COLORS.surface,
+  calendarBackground: COLORS.surface,
+  textSectionTitleColor: COLORS.icon,
+
+  selectedDayBackgroundColor: COLORS.primary,
+  selectedDayTextColor: COLORS.white,
+
+  todayTextColor: COLORS.primary,
+  dayTextColor: COLORS.text,
+  textDisabledColor: COLORS.border,
+
+  monthTextColor: COLORS.text,
+  arrowColor: COLORS.primary,
+
+  textMonthFontWeight: "700",
+  textDayFontWeight: "500",
+  textDayHeaderFontWeight: "700",
+  textDayFontSize: 15,
+  textDayHeaderFontSize: 12,
+}}
         />
       </View>
 
@@ -224,6 +234,6 @@ export default function CalendarScreen() {
           ))
         )}
       </View>
-    </ScrollView>
+    </AppScreen>
   );
 }

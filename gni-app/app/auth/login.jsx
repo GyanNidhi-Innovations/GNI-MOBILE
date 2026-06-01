@@ -2,19 +2,25 @@ import { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
   Image,
 } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
 import { loginUserApi } from "../../src/services/authService";
 import { useAuthStore } from "../../src/stores/authStore";
+
+import {
+  COLORS,
+  SPACING,
+  TYPOGRAPHY,
+  RADIUS,
+} from "../../src/theme";
+
+import AppScreen from "../../src/components/common/AppScreen";
+import AppButton from "../../src/components/ui/AppButton";
+import AppInput from "../../src/components/ui/AppInput";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -41,8 +47,6 @@ export default function LoginScreen() {
       });
 
       if (response?.success) {
-        console.log("LOGIN RESPONSE:", response);
-
         const token =
           response.token ||
           response.accessToken ||
@@ -50,22 +54,17 @@ export default function LoginScreen() {
           response.data?.token ||
           response.data?.accessToken ||
           null;
-              
-        const user =
-          response.user ||
-          response.data?.user ||
-          null;
-              
-        console.log("TOKEN FOUND:", token);
-              
-        await setAuth({
-          user,
-          token,
-        });
-      
+
+        const user = response.user || response.data?.user || null;
+
+        await setAuth({ user, token });
+
         router.replace("/(protected)/home");
-      }else {
-        Alert.alert("Login failed", response?.message || "Invalid credentials");
+      } else {
+        Alert.alert(
+          "Login Failed",
+          response?.message || "Invalid credentials"
+        );
       }
     } catch (error) {
       Alert.alert(
@@ -80,86 +79,79 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-[#F6F8FB]"
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View className="flex-1 justify-center px-6">
-        <View className="mb-5 items-center" >
+    <AppScreen centered>
+      <View>
+        <View
+          style={{
+            marginBottom: SPACING.xxxl + 8,
+            alignItems: "center",
+          }}
+        >
           <Image
             source={{
               uri: "https://res.cloudinary.com/dwqwtolrt/image/upload/c_limit,w_800,q_75,f_auto/v1760073633/logo_wvim3n.png",
             }}
-            className="mb-5 h-20 w-56"
+            style={{
+              width: 240,
+              height: 90,
+            }}
             resizeMode="contain"
           />
         </View>
 
-        <View className="rounded-[32px] bg-white p-6">
-          <Text className="mb-2 text-[13px] font-semibold text-[#101828]">
-            Email Address
-          </Text>
+        <View
+          style={{
+            backgroundColor: COLORS.surface,
+            borderRadius: RADIUS.xxl,
+            padding: SPACING.xxl,
+          }}
+        >
+          <AppInput
+            label="Email Address"
+            icon="mail-outline"
+            placeholder="Enter email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            returnKeyType="next"
+            blurOnSubmit={false}
+          />
 
-          <View className="mb-5 flex-row items-center rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-4">
-            <Ionicons name="mail-outline" size={20} color="#98A2B3" />
+          <AppInput
+            label="Password"
+            icon="lock-closed-outline"
+            placeholder="Enter password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            rightText={showPassword ? "Hide" : "Show"}
+            onRightPress={() => setShowPassword(!showPassword)}
+            style={{ marginBottom: SPACING.xxl }}
+          />
 
-            <TextInput
-              placeholder="Enter email"
-              placeholderTextColor="#667085"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              className="ml-3 flex-1 py-4 text-[15px] text-[#101828]"
-            />
-          </View>
-
-          <Text className="mb-2 text-[13px] font-semibold text-[#101828]">
-            Password
-          </Text>
-
-          <View className="mb-6 flex-row items-center rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-4">
-            <Ionicons name="lock-closed-outline" size={20} color="#98A2B3" />
-
-            <TextInput
-              placeholder="Enter password"
-              placeholderTextColor="#667085"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              className="ml-3 flex-1 py-4 text-[15px] text-[#101828]"
-            />
-
-            <Pressable onPress={() => setShowPassword(!showPassword)}>
-              <Text className="text-[13px] font-semibold text-[#0F5EFF]">
-                {showPassword ? "Hide" : "Show"}
-              </Text>
-            </Pressable>
-          </View>
-
-          <Pressable
+          <AppButton
+            title="Login"
+            loading={loading}
             onPress={handleLogin}
-            disabled={loading}
-            className={`items-center rounded-[22px] py-4 ${
-              loading ? "bg-[#D0D5DD]" : "bg-[#0F5EFF]"
-            }`}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text className="text-[16px] font-semibold text-white">
-                Login
-              </Text>
-            )}
-          </Pressable>
+          />
         </View>
 
         <Pressable onPress={() => router.push("/auth/signup")}>
-          <Text className="mt-8 text-center text-[14px] font-semibold text-[#0F5EFF]">
-            Don&apos;t have an account? Sign up
+          <Text
+            style={{
+              marginTop: SPACING.xxxl,
+              textAlign: "center",
+              fontSize: TYPOGRAPHY.small,
+              fontWeight: "600",
+              color: COLORS.primary,
+            }}
+          >
+            Don't have an account? Sign up
           </Text>
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </AppScreen>
   );
 }

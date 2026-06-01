@@ -5,11 +5,11 @@ import {
   mediaDevices,
 } from "react-native-webrtc";
 
-const SIGNALING_BASE = "https://demos.gyannidhi.in/premises-stream";
-const WS_BASE = "wss://demos.gyannidhi.in/premises-stream/ws";
+const PREMISES_BASE = "https://demos.gyannidhi.in/premises";
+const WS_BASE = "wss://demos.gyannidhi.in/signaling/ws";
 
 const fetchTurnConfig = async () => {
-  const res = await fetch(`${SIGNALING_BASE}/api/turn`);
+  const res = await fetch(`${PREMISES_BASE}/api/turn`);
 
   if (!res.ok) {
     throw new Error("Failed to fetch TURN config");
@@ -18,7 +18,9 @@ const fetchTurnConfig = async () => {
   return await res.json();
 };
 
-export const startPremisesLiveStream = async ({ room, attempt }) => {
+export const startHireAIPremisesLiveStream = async ({ room, candidateId }) => {
+  console.log("HIREAI WEBRTC START", { room, candidateId });
+
   const turnConfig = await fetchTurnConfig();
 
   const stream = await mediaDevices.getUserMedia({
@@ -41,82 +43,130 @@ export const startPremisesLiveStream = async ({ room, attempt }) => {
 
   const wsUrl =
     `${WS_BASE}?room=${encodeURIComponent(room)}` +
-    `&role=premises&attempt=${encodeURIComponent(attempt || "")}`;
+    `&role=capture&candidate_id=${encodeURIComponent(candidateId || "")}`;
+
+  console.log("HIREAI WS URL:", wsUrl);
 
   const ws = new WebSocket(wsUrl);
 
   let viewerPeerId = null;
-  let started = false;
+  let offerSent = false;
 
   const send = (payload) => {
     if (ws.readyState === WebSocket.OPEN) {
+      console.log("HIREAI WS SEND:", payload.type);
       ws.send(JSON.stringify(payload));
     }
   };
 
   const createAndSendOffer = async (toPeerId) => {
-    if (started) return;
-    started = true;
+  if (!toPeerId) return;
+  if (offerSent) {
+    console.log("HIREAI offer already sent, skipping duplicate");
+    return;
+  }
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+  offerSent = true;
+  viewerPeerId = toPeerId;
 
-    send({
-      type: "offer",
-      to: toPeerId,
-      offer,
-      room,
-      role: "premises",
-      attempt,
-    });
-  };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  send({
+    type: "offer",
+    to: toPeerId,
+    sdp: offer.sdp,
+  });
+
+  console.log("HIREAI offer sent to", toPeerId);
+};
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       send({
-        type: "ice-candidate",
+        type: "candidate",
         to: viewerPeerId || undefined,
         candidate: event.candidate,
       });
     }
   };
 
+  pc.onconnectionstatechange = () => {
+    console.log("HIREAI PC state:", pc.connectionState);
+  };
+
   ws.onmessage = async (event) => {
-    const msg = JSON.parse(event.data);
+    let msg;
+
+    try {
+      msg = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    console.log("HIREAI WS RECV:", msg.type, msg.role || msg._from?.role);
 
     if (msg.type === "joined") {
-      const existingViewer = (msg.peers || []).find(
-        (peer) => peer.role === "viewer"
+      const viewer = (msg.peers || []).find(
+        (p) => p.role === "interviewer" || p.role === "viewer"
       );
 
-      if (existingViewer?.peerId) {
-        viewerPeerId = existingViewer.peerId;
-        await createAndSendOffer(viewerPeerId);
+      if (viewer?.peerId) {
+        await createAndSendOffer(viewer.peerId);
       }
+
+      return;
     }
 
-    if (msg.type === "peer-joined" && msg.role === "viewer") {
-      viewerPeerId = msg.peerId;
-      await createAndSendOffer(viewerPeerId);
+    if (
+      msg.type === "peer-joined" &&
+      (msg.role === "interviewer" || msg.role === "viewer")
+    ) {
+      await createAndSendOffer(msg.peerId);
+      return;
     }
 
-    if (msg.type === "answer") {
-      await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+    if (msg.type === "viewer-ready" && msg._from?.peerId) {
+      await createAndSendOffer(msg._from.peerId);
+      return;
     }
 
-    if (msg.type === "ice-candidate" && msg.candidate) {
-      await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
-    }
+if (msg.type === "answer" && msg.sdp) {
+  if (pc.signalingState !== "have-local-offer") {
+    console.log("Skipping duplicate answer, state:", pc.signalingState);
+    return;
+  }
 
-    if (msg.type === "peer-left" && msg.peerId === viewerPeerId) {
-      viewerPeerId = null;
-      started = false;
+  await pc.setRemoteDescription(
+    new RTCSessionDescription({
+      type: "answer",
+      sdp: msg.sdp,
+    })
+  );
+
+  console.log("HIREAI answer set");
+  return;
+}
+
+    if (msg.type === "candidate" && msg.candidate) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      } catch (e) {
+        console.log("HIREAI add candidate failed", e);
+      }
     }
   };
 
   await new Promise((resolve, reject) => {
-    ws.onopen = resolve;
-    ws.onerror = () => reject(new Error("WebSocket signaling failed"));
+    ws.onopen = () => {
+      console.log("HIREAI WS OPEN");
+      resolve();
+    };
+
+    ws.onerror = (e) => {
+      console.log("HIREAI WS ERROR", e);
+      reject(new Error("HireAI premises signaling failed"));
+    };
   });
 
   return {

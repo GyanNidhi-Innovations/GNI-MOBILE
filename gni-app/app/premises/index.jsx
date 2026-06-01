@@ -1,16 +1,21 @@
 import { router } from "expo-router";
 import { View, Text, Pressable } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function PremisesHomeScreen() {
   return (
-    <View className="flex-1 bg-[#F6F8FB] px-5 pt-8">
+    <SafeAreaView
+  className="flex-1 bg-[#F6F8FB]"
+  edges={["top", "bottom"]}
+>
+    <View className="flex-1 bg-[#F6F8FB] px-5 pt-2">
       {/* HEADER */}
 
-      <View className="mb-10">
+      <View className="mb-7">
         <Text className="text-[34px] font-bold leading-[42px] text-[#101828]">
           Premises
-          {"\n"}
+          {"\n"} 
           Verification
         </Text>
 
@@ -68,6 +73,7 @@ export default function PremisesHomeScreen() {
         </Text>
       </View>
     </View>
+    </SafeAreaView>
   );
 }
 

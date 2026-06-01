@@ -10,11 +10,13 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { bootstrapExamPremises } from "../../src/services/premisesService";
 
 export default function PremisesQRScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
+  const insets = useSafeAreaInsets();
   const [scanned, setScanned] = useState(false);
 
   const handleScanned = async ({ data }) => {
@@ -128,7 +130,14 @@ export default function PremisesQRScanScreen() {
 
       <View className="absolute inset-0 bg-black/20" />
 
-      <View className="absolute left-5 right-5 top-12">
+      <View
+  style={{
+    position: "absolute",
+    left: 20,
+    right: 20,
+    top: insets.top + 8,
+  }}
+>
         <View className="flex-row items-center justify-between">
           <Pressable
             onPress={() => router.back()}
@@ -145,7 +154,7 @@ export default function PremisesQRScanScreen() {
         </View>
       </View>
 
-      <View className="absolute left-0 right-0 top-[22%] items-center">
+      <View className="absolute left-0 right-0 top-[18%] items-center">
         <View className="h-72 w-72 rounded-[32px] border-4 border-white/90 bg-transparent">
           <View className="absolute -left-1 -top-1 h-12 w-12 rounded-tl-[32px] border-l-4 border-t-4 border-[#0F5EFF]" />
           <View className="absolute -right-1 -top-1 h-12 w-12 rounded-tr-[32px] border-r-4 border-t-4 border-[#0F5EFF]" />
@@ -163,7 +172,20 @@ export default function PremisesQRScanScreen() {
         </Text>
       </View>
 
-      <View className="absolute bottom-0 left-0 right-0 rounded-t-[34px] bg-white px-5 pb-8 pt-6">
+      <View
+  style={{
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "white",
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: insets.bottom + 24,
+  }}
+>
         <View className="mb-5 flex-row items-start">
           <View className="mr-4 h-11 w-11 items-center justify-center rounded-2xl bg-[#EEF4FF]">
             <Ionicons name="shield-checkmark-outline" size={22} color="#0F5EFF" />

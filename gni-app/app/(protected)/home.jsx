@@ -5,17 +5,22 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  ScrollView,
 } from "react-native";
 
 import { router, useFocusEffect } from "expo-router";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
-
 import { Image } from "react-native";
-
 import { Ionicons } from "@expo/vector-icons";
+
+import AppScreen from "@/components/common/AppScreen";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  COLORS,
+  SPACING,
+} from "@/theme";
 
 export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
@@ -26,6 +31,7 @@ export default function HomeScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  
 
   const fetchDashboard = async () => {
     try {
@@ -83,24 +89,26 @@ export default function HomeScreen() {
       )[0];
   }, [registeredEvents]);
 
+  const insets = useSafeAreaInsets();
+
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
-        <ActivityIndicator size="small" color="#0F5EFF" />
-      </View>
+      <AppScreen centered scroll={false}>
+  <ActivityIndicator
+    size="small"
+    color={COLORS.primary}
+  />
+</AppScreen>
     );
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-[#F6F8FB]"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingTop: 24,
-        paddingBottom: 120,
-      }}
-    >
+  <AppScreen
+    contentStyle={{
+  paddingTop: 8,
+  paddingBottom: 120,
+}}
+  >
       {/* HEADER */}
 
       <View className="mb-8 flex-row items-center justify-between">
@@ -224,7 +232,7 @@ export default function HomeScreen() {
     title="Events"
     subtitle="Explore events"
     icon={
-      <Ionicons name="calendar-outline" size={22} color="#0F5EFF" />
+      <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
     }
     onPress={() => router.push("/(protected)/events")}
   />
@@ -233,7 +241,7 @@ export default function HomeScreen() {
     title="Calendar"
     subtitle="View schedule"
     icon={
-      <Ionicons name="today-outline" size={22} color="#0F5EFF" />
+      <Ionicons name="today-outline" size={22} color={COLORS.primary} />
     }
     onPress={() => router.push("/(protected)/calendar")}
   />
@@ -242,7 +250,7 @@ export default function HomeScreen() {
     title="Alerts"
     subtitle="Recent updates"
     icon={
-      <Ionicons name="notifications-outline" size={22} color="#0F5EFF" />
+      <Ionicons name="notifications-outline" size={22} color={COLORS.primary} />
     }
     onPress={() => router.push("/(protected)/notifications")}
   />
@@ -251,7 +259,7 @@ export default function HomeScreen() {
     title="Premises"
     subtitle="Camera validation"
     icon={
-      <Ionicons name="camera-outline" size={22} color="#0F5EFF" />
+      <Ionicons name="camera-outline" size={22} color={COLORS.primary} />
     }
     onPress={() => router.push("/premises")}
   />
@@ -308,7 +316,7 @@ export default function HomeScreen() {
           ))
         )}
       </View>
-    </ScrollView>
+    </AppScreen>
   );
 }
 

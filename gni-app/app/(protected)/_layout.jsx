@@ -10,6 +10,8 @@ import {
   getUnreadNotificationCount,
 } from "@/services/notificationService";
 
+import { COLORS } from "@/theme";
+
 export default function ProtectedLayout() {
   const user = useAuthStore((state) => state.user);
   const userId = user?.id || user?._id;
@@ -18,7 +20,9 @@ export default function ProtectedLayout() {
   const insets = useSafeAreaInsets();
   const hasRegistered = useRef(false);
 
-  const unreadCount = useAuthStore((state) => state.unreadNotificationCount);
+  const unreadCount = useAuthStore(
+    (state) => state.unreadNotificationCount
+  );
 
   const setUnreadNotificationCount = useAuthStore(
     (state) => state.setUnreadNotificationCount
@@ -49,8 +53,11 @@ export default function ProtectedLayout() {
     });
 
     const receivedSub = Notifications.addNotificationReceivedListener(() => {
-      const current = useAuthStore.getState().unreadNotificationCount;
-      useAuthStore.getState().setUnreadNotificationCount(current + 1);
+      const store = useAuthStore.getState();
+
+      store.setUnreadNotificationCount(
+        store.unreadNotificationCount + 1
+      );
     });
 
     const responseSub =
@@ -76,7 +83,14 @@ export default function ProtectedLayout() {
     };
   }, [userId, router]);
 
-  const safeBottom = Math.max(insets.bottom, 12);
+  const safeBottom = Math.max(insets.bottom, 8);
+
+  const notificationBadge =
+    unreadCount > 0
+      ? unreadCount > 99
+        ? "99+"
+        : unreadCount
+      : undefined;
 
   return (
     <Tabs
@@ -84,8 +98,8 @@ export default function ProtectedLayout() {
         headerShown: false,
         tabBarShowLabel: true,
 
-        tabBarActiveTintColor: "#0F5EFF",
-        tabBarInactiveTintColor: "#94A3B8",
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.icon,
 
         tabBarStyle: {
           position: "absolute",
@@ -93,10 +107,10 @@ export default function ProtectedLayout() {
           right: 16,
           bottom: safeBottom,
 
-          height: 68 + safeBottom,
+          height: 64 + safeBottom,
 
           borderRadius: 24,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: COLORS.white,
           borderTopWidth: 0,
 
           paddingTop: 10,
@@ -104,7 +118,7 @@ export default function ProtectedLayout() {
 
           elevation: 8,
 
-          shadowColor: "#000",
+          shadowColor: COLORS.black,
           shadowOpacity: 0.08,
           shadowRadius: 16,
           shadowOffset: {
@@ -120,8 +134,8 @@ export default function ProtectedLayout() {
         },
 
         tabBarBadgeStyle: {
-          backgroundColor: "#0F5EFF",
-          color: "#FFFFFF",
+          backgroundColor: COLORS.primary,
+          color: COLORS.white,
           fontSize: 10,
           fontWeight: "700",
         },
@@ -156,13 +170,12 @@ export default function ProtectedLayout() {
       />
 
       <Tabs.Screen
-        name="notifications"
+        name="calendar"
         options={{
-          title: "Alerts",
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          title: "Calendar",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "notifications" : "notifications-outline"}
+              name={focused ? "today" : "today-outline"}
               size={22}
               color={color}
             />
@@ -171,12 +184,13 @@ export default function ProtectedLayout() {
       />
 
       <Tabs.Screen
-        name="calendar"
+        name="notifications"
         options={{
-          title: "Calendar",
+          title: "Alerts",
+          tabBarBadge: notificationBadge,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "today" : "today-outline"}
+              name={focused ? "notifications" : "notifications-outline"}
               size={22}
               color={color}
             />

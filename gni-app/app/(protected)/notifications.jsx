@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,17 +7,16 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
+import AppScreen from "@/components/common/AppScreen";
+import { COLORS } from "@/theme";
 
 function formatDateHeading(dateString) {
   const date = new Date(dateString);
-
   const today = new Date();
-
   const yesterday = new Date();
 
   yesterday.setDate(today.getDate() - 1);
@@ -29,7 +27,6 @@ function formatDateHeading(dateString) {
     a.getFullYear() === b.getFullYear();
 
   if (isSameDay(date, today)) return "Today";
-
   if (isSameDay(date, yesterday)) return "Yesterday";
 
   return date.toLocaleDateString(undefined, {
@@ -51,73 +48,67 @@ export default function NotificationsScreen() {
   );
 
   const [notifications, setNotifications] = useState([]);
-
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const userId = user?.id || user?._id;
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      if (!userId) {
+        setNotifications([]);
+        setUnreadNotificationCount(0);
+        return;
+      }
+
+      const res = await apiClient(`/notifications/user/${userId}`);
+      const fetchedNotifications = res?.notifications || [];
+
+      setNotifications(fetchedNotifications);
+
+      const unreadItems = fetchedNotifications.filter(
+        (item) => !item.read
+      ).length;
+
+      setUnreadNotificationCount(unreadItems);
+    } catch (error) {
+      console.log(error);
+      Alert.alert(
+        "Error",
+        error?.message || "Failed to load notifications"
+      );
+    }
+  }, [userId, setUnreadNotificationCount]);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        if (!user?.id) {
-          setLoading(false);
-          return;
-        }
-
-        const res = await apiClient(
-          `/notifications/user/${user.id}`
-        );
-
-        const fetchedNotifications =
-          res?.notifications || [];
-
-        setNotifications(fetchedNotifications);
-
-        const unreadItems =
-          fetchedNotifications.filter(
-            (item) => !item.read
-          ).length;
-
-        setUnreadNotificationCount(unreadItems);
-      } catch (error) {
-        console.log(error);
-
-        Alert.alert(
-          "Error",
-          error?.message ||
-            "Failed to load notifications"
-        );
-      } finally {
-        setLoading(false);
-      }
+    const load = async () => {
+      setLoading(true);
+      await fetchNotifications();
+      setLoading(false);
     };
 
-    fetchNotifications();
-  }, [user?.id]);
+    load();
+  }, [fetchNotifications]);
 
-  const handleMarkAsRead = async (
-    notificationId
-  ) => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
+
+  const handleMarkAsRead = async (notificationId) => {
     try {
-      await apiClient(
-        `/notifications/${notificationId}/read`,
-        {
-          method: "PATCH",
-        }
-      );
+      await apiClient(`/notifications/${notificationId}/read`, {
+        method: "PATCH",
+      });
 
       let wasUnread = false;
 
       setNotifications((prev) =>
         prev.map((item) => {
-          if (
-            item._id === notificationId &&
-            !item.read
-          ) {
+          if (item._id === notificationId && !item.read) {
             wasUnread = true;
-
-            return {
-              ...item,
-              read: true,
-            };
+            return { ...item, read: true };
           }
 
           return item;
@@ -129,11 +120,9 @@ export default function NotificationsScreen() {
       }
     } catch (error) {
       console.log(error);
-
       Alert.alert(
         "Error",
-        error?.message ||
-          "Failed to mark as read"
+        error?.message || "Failed to mark as read"
       );
     }
   };
@@ -142,13 +131,9 @@ export default function NotificationsScreen() {
     const grouped = {};
 
     notifications.forEach((item) => {
-      const key = formatDateHeading(
-        item.createdAt
-      );
+      const key = formatDateHeading(item.createdAt);
 
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
+      if (!grouped[key]) grouped[key] = [];
 
       grouped[key].push(item);
     });
@@ -190,31 +175,21 @@ export default function NotificationsScreen() {
           }
         }}
         className={`mb-4 rounded-[28px] p-5 ${
-          item.read
-            ? "bg-white"
-            : "bg-[#EEF4FF]"
+          item.read ? "bg-white" : "bg-[#EEF4FF]"
         }`}
       >
         <View className="flex-row">
-          {/* ICON */}
-
           <View
             className={`mr-4 h-12 w-12 items-center justify-center rounded-2xl ${
-              item.read
-                ? "bg-[#F2F4F7]"
-                : "bg-[#0F5EFF]"
+              item.read ? "bg-[#F2F4F7]" : "bg-[#0F5EFF]"
             }`}
           >
             <Ionicons
               name="notifications"
               size={20}
-              color={
-                item.read ? "#667085" : "#FFFFFF"
-              }
+              color={item.read ? COLORS.textSecondary : COLORS.white}
             />
           </View>
-
-          {/* CONTENT */}
 
           <View className="flex-1">
             <View className="flex-row items-start justify-between">
@@ -224,9 +199,7 @@ export default function NotificationsScreen() {
 
               <Text className="text-[12px] text-[#98A2B3]">
                 {item.createdAt
-                  ? new Date(
-                      item.createdAt
-                    ).toLocaleTimeString([], {
+                  ? new Date(item.createdAt).toLocaleTimeString([], {
                       hour: "numeric",
                       minute: "2-digit",
                     })
@@ -251,61 +224,66 @@ export default function NotificationsScreen() {
     );
   };
 
+  const renderHeader = () => (
+    <View className="mb-7">
+      <Text className="text-[32px] font-bold text-[#101828]">
+        Notifications
+      </Text>
+
+      <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
+        Stay updated with event reminders, registrations, and announcements.
+      </Text>
+    </View>
+  );
+
+  const renderEmpty = () => (
+    <View className="items-center justify-center px-10 py-24">
+      <Ionicons
+        name="notifications-off-outline"
+        size={48}
+        color={COLORS.icon}
+      />
+
+      <Text className="mt-5 text-center text-[16px] font-semibold text-[#101828]">
+        No notifications yet
+      </Text>
+
+      <Text className="mt-2 text-center text-[14px] leading-6 text-[#667085]">
+        We'll show event reminders, registrations, and announcements here.
+      </Text>
+    </View>
+  );
+
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
-        <ActivityIndicator
-          size="small"
-          color="#0F5EFF"
-        />
-      </View>
+      <AppScreen centered scroll={false}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      </AppScreen>
     );
   }
 
   return (
-    <View className="flex-1 bg-[#F6F8FB]">
-      {/* HEADER */}
-
-      <View className="px-5 pt-6">
-        <Text className="text-[32px] font-bold text-[#101828]">
-          Notifications
-        </Text>
-
-        <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
-          Stay updated with event reminders,
-          registrations, and announcements.
-        </Text>
-      </View>
-
-      {/* CONTENT */}
-
-      {notifications.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-10">
-          <Ionicons
-            name="notifications-off-outline"
-            size={48}
-            color="#98A2B3"
-          />
-
-          <Text className="mt-5 text-center text-[16px] text-[#667085]">
-            No notifications yet
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={sectionedNotifications}
-          keyExtractor={(item) =>
-            item.id || item._id
-          }
-          renderItem={renderNotification}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingTop: 24,
-            paddingBottom: 120,
-          }}
-        />
-      )}
-    </View>
+    <AppScreen scroll={false}>
+      <FlatList
+        data={sectionedNotifications}
+        removeClippedSubviews
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        keyExtractor={(item) => item.id || item._id}
+        renderItem={renderNotification}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 20,
+          paddingTop: 8,
+          paddingBottom: 120,
+        }}
+      />
+    </AppScreen>
   );
 }

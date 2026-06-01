@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuthStore } from "@/stores/authStore";
 import { getEventById } from "@/services/eventService";
@@ -18,6 +19,7 @@ import { apiClient } from "@/services/apiClient";
 export default function EventDetailsScreen() {
   const { id, source } = useLocalSearchParams();
   const user = useAuthStore((state) => state.user);
+  const insets = useSafeAreaInsets();
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,21 +32,19 @@ export default function EventDetailsScreen() {
       if (typeof registeredUserId === "object") {
         return registeredUserId?._id?.toString() === userId?.toString();
       }
+
       return registeredUserId?.toString() === userId?.toString();
     }) || false;
 
-  const registeredCount = event?.registeredUsers?.length || 0;
-
-  const isFull =
-    typeof event?.seats === "number" &&
-    event.seats > 0 &&
-    registeredCount >= event.seats;
+  const isFull = false;
 
   useEffect(() => {
     const fetchEvent = async () => {
       try {
         setLoading(true);
+
         const res = await getEventById(id);
+
         setEvent(res?.success ? res.event : null);
       } catch (error) {
         console.log("fetchEvent error:", error);
@@ -106,18 +106,18 @@ export default function EventDetailsScreen() {
   };
 
   const getButtonText = () => {
-    if (isFull) return "Event Full";
     if (isRegistered) return "Already Registered";
     if (registering) return "Registering...";
     return "Register Now";
   };
 
-  const disabled = isRegistered || registering || isFull;
+  const disabled = isRegistered || registering;
 
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
         <ActivityIndicator size="small" color="#0F5EFF" />
+
         <Text className="mt-3 text-[14px] text-[#667085]">
           Loading event...
         </Text>
@@ -146,7 +146,9 @@ export default function EventDetailsScreen() {
     <View className="flex-1 bg-[#F6F8FB]">
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 130 }}
+        contentContainerStyle={{
+          paddingBottom: 260,
+        }}
       >
         <View className="relative">
           <Image
@@ -162,13 +164,13 @@ export default function EventDetailsScreen() {
 
           <Pressable
             onPress={() => router.back()}
-            className="absolute left-5 top-12 h-11 w-11 items-center justify-center rounded-full bg-white"
+            className="absolute left-5 top-16 h-11 w-11 items-center justify-center rounded-full bg-white"
           >
             <Ionicons name="chevron-back" size={22} color="#101828" />
           </Pressable>
         </View>
 
-        <View className="-mt-8 rounded-t-[32px] bg-[#F6F8FB] px-5 pt-6">
+        <View className="-mt-8 rounded-t-[32px] bg-[#F6F8FB] px-5 pt-8">
           {source === "calendar" && (
             <View className="mb-4 self-start rounded-full bg-[#EEF4FF] px-4 py-2">
               <Text className="text-[12px] font-semibold text-[#0F5EFF]">
@@ -185,9 +187,7 @@ export default function EventDetailsScreen() {
             <InfoRow
               icon="calendar-outline"
               label="Date & Time"
-              value={
-                event.date ? new Date(event.date).toLocaleString() : "-"
-              }
+              value={event.date ? new Date(event.date).toLocaleString() : "-"}
             />
 
             <Divider />
@@ -196,18 +196,6 @@ export default function EventDetailsScreen() {
               icon="location-outline"
               label="Location"
               value={event.location || "Online"}
-            />
-
-            <Divider />
-
-            <InfoRow
-              icon="people-outline"
-              label="Seats"
-              value={
-                typeof event.seats === "number" && event.seats > 0
-                  ? `${registeredCount} / ${event.seats} registered`
-                  : `${registeredCount} registered`
-              }
             />
           </View>
 
@@ -223,12 +211,25 @@ export default function EventDetailsScreen() {
         </View>
       </ScrollView>
 
-      <View className="absolute bottom-0 left-0 right-0 bg-white px-5 pb-8 pt-4">
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 95,
+          backgroundColor: "white",
+          paddingHorizontal: 20,
+          paddingTop: 16,
+          paddingBottom: insets.bottom + 16,
+          zIndex: 999,
+          elevation: 20,
+        }}
+      >
         <Pressable
           disabled={disabled}
           onPress={handleRegister}
           className={`rounded-[22px] py-4 ${
-            disabled ? "bg-[#D0D5DD]" : "bg-[#0F5EFF]"
+            disabled ? "bg-[#0062ff]" : "bg-[#0F5EFF]"
           }`}
         >
           <Text className="text-center text-[16px] font-semibold text-white">
@@ -251,6 +252,7 @@ function InfoRow({ icon, label, value }) {
         <Text className="text-[12px] font-medium text-[#98A2B3]">
           {label}
         </Text>
+
         <Text className="mt-1 text-[15px] font-semibold text-[#101828]">
           {value}
         </Text>

@@ -16,6 +16,9 @@ export default {
     android: {
       googleServicesFile:
         process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      softwareKeyboardLayoutMode: "resize",
+
+      permissions: ["CAMERA", "RECORD_AUDIO"],
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/icon.png",
