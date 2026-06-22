@@ -6,8 +6,8 @@ export const s3Client = new S3Client({
   region: process.env.SPACES_REGION || "nyc3",
   endpoint: `https://${process.env.SPACES_REGION || "nyc3"}.digitaloceanspaces.com`,
   credentials: {
-    accessKeyId: process.env.SPACES_ACCESS_KEY,
-    secretAccessKey: process.env.SPACES_SECRET_KEY,
+    accessKeyId: process.env.SPACES_KEY,
+    secretAccessKey: process.env.SPACES_SECRET,
   },
   forcePathStyle: false, // Required for DigitalOcean Spaces
 });
