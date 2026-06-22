@@ -19,6 +19,8 @@ export default function ProtectedLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const hasRegistered = useRef(false);
+  const safeBottom = Math.max(insets.bottom, 12);
+  const tabBarHeight = 68 + safeBottom;
 
   const unreadCount = useAuthStore(
     (state) => state.unreadNotificationCount
@@ -83,8 +85,6 @@ export default function ProtectedLayout() {
     };
   }, [userId, router]);
 
-  const safeBottom = Math.max(insets.bottom, 8);
-
   const notificationBadge =
     unreadCount > 0
       ? unreadCount > 99
@@ -105,19 +105,19 @@ export default function ProtectedLayout() {
           position: "absolute",
           left: 16,
           right: 16,
-          bottom: safeBottom,
-
-          height: 64 + safeBottom,
-
+          bottom: 12 + insets.bottom,
+        
+          height: tabBarHeight,
+        
           borderRadius: 24,
           backgroundColor: COLORS.white,
           borderTopWidth: 0,
-
+        
           paddingTop: 10,
           paddingBottom: safeBottom,
-
+        
           elevation: 8,
-
+        
           shadowColor: COLORS.black,
           shadowOpacity: 0.08,
           shadowRadius: 16,
@@ -126,7 +126,6 @@ export default function ProtectedLayout() {
             height: 8,
           },
         },
-
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
@@ -138,6 +137,10 @@ export default function ProtectedLayout() {
           color: COLORS.white,
           fontSize: 10,
           fontWeight: "700",
+        },
+        tabBarItemStyle: {
+          height: 56,
+          paddingVertical: 4,
         },
       }}
     >

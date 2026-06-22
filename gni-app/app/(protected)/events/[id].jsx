@@ -147,7 +147,7 @@ export default function EventDetailsScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingBottom: 260,
+          paddingBottom: 190 + insets.bottom,
         }}
       >
         <View className="relative">
@@ -164,7 +164,12 @@ export default function EventDetailsScreen() {
 
           <Pressable
             onPress={() => router.back()}
-            className="absolute left-5 top-16 h-11 w-11 items-center justify-center rounded-full bg-white"
+            style={{
+            position: "absolute",
+            left: 20,
+            top: insets.top + 16,
+          }}
+          className="h-11 w-11 items-center justify-center rounded-full bg-white"
           >
             <Ionicons name="chevron-back" size={22} color="#101828" />
           </Pressable>
@@ -214,13 +219,14 @@ export default function EventDetailsScreen() {
       <View
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 95,
+          left: 16,
+          right: 16,
+          bottom: 100 + insets.bottom,
           backgroundColor: "white",
-          paddingHorizontal: 20,
-          paddingTop: 16,
-          paddingBottom: insets.bottom + 16,
+          borderRadius: 28,
+          paddingHorizontal: 14,
+          paddingTop: 14,
+          paddingBottom: 14,
           zIndex: 999,
           elevation: 20,
         }}

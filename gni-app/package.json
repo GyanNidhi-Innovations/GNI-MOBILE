@@ -61,11 +61,12 @@
     "typescript": "~5.9.2"
   },
   "private": true,
-
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["react-native-webrtc"]
+        "exclude": [
+          "react-native-webrtc"
+        ]
       }
     }
   }

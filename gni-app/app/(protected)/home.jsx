@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,11 +15,9 @@ import { Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import AppScreen from "@/components/common/AppScreen";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  COLORS,
-  SPACING,
+  COLORS
 } from "@/theme";
 
 export default function HomeScreen() {
@@ -68,14 +66,11 @@ export default function HomeScreen() {
     }
   };
 
-  useFocusEffect(
-    useMemo(
-      () => () => {
-        fetchDashboard();
-      },
-      [userId]
-    )
-  );
+useFocusEffect(
+  useCallback(() => {
+    fetchDashboard();
+  }, [userId])
+);
 
   const nextEvent = useMemo(() => {
     return registeredEvents
@@ -89,7 +84,7 @@ export default function HomeScreen() {
       )[0];
   }, [registeredEvents]);
 
-  const insets = useSafeAreaInsets();
+  
 
   if (loading) {
     return (
@@ -125,9 +120,13 @@ export default function HomeScreen() {
       Welcome back
     </Text>
 
-    <Text className="mt-1 text-right text-[24px] font-bold text-[#101828]">
-      {user?.name || "User"} 👋
-    </Text>
+<Text
+  numberOfLines={1}
+  adjustsFontSizeToFit
+  className="mt-1 max-w-[210px] text-right text-[22px] font-bold text-[#101828]"
+>
+  {user?.name || "User"} 👋
+</Text>
   </View>
 </View>
 
@@ -341,10 +340,11 @@ function QuickActionCard({
   onPress,
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      className="mb-4 w-[48%] rounded-[24px] bg-white p-5"
-    >
+<Pressable
+  onPress={onPress}
+  className="mb-4 rounded-[24px] bg-white p-5"
+  style={{ width: "48%" }}
+>
       <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
         {icon}
       </View>

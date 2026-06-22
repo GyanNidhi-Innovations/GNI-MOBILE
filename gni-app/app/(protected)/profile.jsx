@@ -2,8 +2,8 @@ import { useCallback, useState } from "react";
 import {
   View,
   Text,
-  Pressable,
   ActivityIndicator,
+  Pressable,
   Alert,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -90,17 +90,13 @@ export default function ProfileScreen() {
     router.replace("/auth/login");
   };
 
-  if (loading) {
-    return (
-      <AppScreen
-  contentStyle={{
-    paddingTop: 8,
-    paddingBottom: 120,
-  }}
->
+if (loading) {
+  return (
+    <AppScreen centered scroll={false}>
+      <ActivityIndicator size="small" color={COLORS.primary} />
     </AppScreen>
-    );
-  }
+  );
+}
 
 if (!user) {
   return (
@@ -122,11 +118,12 @@ if (!user) {
     : "U";
 
 return (
-  <AppScreen
-    contentStyle={{
-      paddingBottom: 120,
-    }}
-  >
+<AppScreen
+  bottomSpace={140}
+  contentStyle={{
+    paddingTop: 8,
+  }}
+>
       <View className="mb-7">
         <Text className="text-[32px] font-bold text-[#101828]">Profile</Text>
         <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
@@ -143,12 +140,19 @@ return (
           </View>
 
           <View className="flex-1">
-            <Text className="text-[24px] font-bold text-white">
-              {user.name || "User"}
-            </Text>
-            <Text className="mt-2 text-[14px] text-blue-100">
-              {user.email || "No email"}
-            </Text>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            className="text-[22px] font-bold text-white"
+          >
+            {user.name || "User"}
+          </Text>
+          <Text
+            numberOfLines={1}
+            className="mt-2 text-[14px] text-blue-100"
+          >
+            {user.email || "No email"}
+          </Text>
           </View>
         </View>
       </View>

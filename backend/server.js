@@ -10,6 +10,7 @@ import notificationRoutes from "./src/routes/notificationRoutes.js";
 import profileRoutes from "./src/routes/profileRoutes.js";
 import { initFirebaseAdmin } from "./src/config/firebaseAdmin.js";
 import premisesRoutes from "./src/routes/premisesRoutes.js";
+import uploadRoutes from "./src/routes/uploadRoutes.js";
 
 dotenv.config();
 
@@ -45,6 +46,7 @@ app.use("/api/events", eventRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/premises", premisesRoutes);
+app.use("/api/upload", uploadRoutes );
 
 const PORT = process.env.PORT || 8080;
 

@@ -1,30 +1,15 @@
 import React from "react";
-import {
-  Pressable,
-  Text,
-  ActivityIndicator,
-} from "react-native";
+import { Pressable, Text, ActivityIndicator } from "react-native";
 
-import {
-  COLORS,
-  SPACING,
-  TYPOGRAPHY,
-  RADIUS,
-} from "../../theme";
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from "../../theme";
 
 export default function AppButton({
   title,
-
   onPress,
-
   loading = false,
-
   disabled = false,
-
   variant = "primary",
-
   style = {},
-
   textStyle = {},
 }) {
   const isDisabled = loading || disabled;
@@ -37,7 +22,9 @@ export default function AppButton({
       : COLORS.border;
 
   const textColor =
-    variant === "secondary"
+    isDisabled
+      ? COLORS.textMuted
+      : variant === "secondary"
       ? COLORS.text
       : COLORS.white;
 
@@ -45,17 +32,16 @@ export default function AppButton({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
-      style={{
+      style={({ pressed }) => ({
+        width: "100%",
+        minHeight: 56,
         alignItems: "center",
         justifyContent: "center",
-
         borderRadius: RADIUS.xl,
-
-        paddingVertical: SPACING.lg,
-
-        backgroundColor: isDisabled
-          ? COLORS.border
-          : backgroundColor,
+        paddingVertical: SPACING.md,
+        paddingHorizontal: SPACING.lg,
+        backgroundColor: isDisabled ? COLORS.border : backgroundColor,
+        opacity: pressed && !isDisabled ? 0.88 : 1,
 
         ...(variant === "secondary"
           ? {
@@ -65,22 +51,19 @@ export default function AppButton({
           : {}),
 
         ...style,
-      }}
+      })}
     >
       {loading ? (
-        <ActivityIndicator
-          color={COLORS.white}
-        />
+        <ActivityIndicator color={variant === "secondary" ? COLORS.primary : COLORS.white} />
       ) : (
         <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
           style={{
-            fontSize:
-              TYPOGRAPHY.button,
-
+            fontSize: TYPOGRAPHY.button,
             fontWeight: "600",
-
             color: textColor,
-
+            textAlign: "center",
             ...textStyle,
           }}
         >

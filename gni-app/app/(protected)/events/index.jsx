@@ -14,11 +14,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { getEvents } from "@/services/eventService";
 import AppScreen from "@/components/common/AppScreen";
 import { COLORS } from "@/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function EventsScreen() {
   const [activeTab, setActiveTab] = useState("upcoming");
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -227,7 +229,7 @@ export default function EventsScreen() {
           flexGrow: 1,
           paddingHorizontal: 20,
           paddingTop: 8,
-          paddingBottom: 120,
+          paddingBottom: 140 + insets.bottom,
         }}
       />
     </AppScreen>

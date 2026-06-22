@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Linking, AppState } from "react-native";
+import { View, Text, Pressable, Linking, AppState } from "react-native";
 import * as Notifications from "expo-notifications";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from "../theme";
 
 export default function NotificationPermissionGate({ children }) {
   const [allowed, setAllowed] = useState(null);
+  const insets = useSafeAreaInsets();
 
   const checkPermission = async () => {
     const { status } = await Notifications.getPermissionsAsync();
@@ -31,34 +35,108 @@ export default function NotificationPermissionGate({ children }) {
 
   if (!allowed) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-2xl font-bold text-center text-gray-900">
-          Enable Notifications
-        </Text>
-
-        <Text className="mt-4 text-base text-center text-gray-600">
-          Notifications are required so you do not miss event updates,
-          registration deadlines, drive alerts, and reminders.
-        </Text>
-
-        <TouchableOpacity
-          onPress={requestPermission}
-          className="mt-8 w-full rounded-xl bg-blue-600 py-4"
+      <SafeAreaView
+        edges={["top", "bottom"]}
+        style={{
+          flex: 1,
+          backgroundColor: COLORS.background,
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            paddingHorizontal: SPACING.xl,
+            paddingTop: SPACING.xl + insets.top,
+            paddingBottom: SPACING.xl + insets.bottom,
+          }}
         >
-          <Text className="text-center text-white font-semibold">
-            Allow Notifications
-          </Text>
-        </TouchableOpacity>
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              alignSelf: "center",
+              backgroundColor: COLORS.white,
+              borderRadius: RADIUS.xxxl || 32,
+              padding: SPACING.xl,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 26,
+                fontWeight: "800",
+                textAlign: "center",
+                color: COLORS.text,
+              }}
+            >
+              Enable Notifications
+            </Text>
 
-        <TouchableOpacity
-          onPress={() => Linking.openSettings()}
-          className="mt-4 w-full rounded-xl border border-gray-300 py-4"
-        >
-          <Text className="text-center text-gray-800 font-semibold">
-            Open Settings
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Text
+              style={{
+                marginTop: SPACING.md,
+                fontSize: TYPOGRAPHY.body || 15,
+                lineHeight: 23,
+                textAlign: "center",
+                color: COLORS.textSecondary,
+              }}
+            >
+              Notifications are required so you do not miss event updates,
+              registration deadlines, drive alerts, and reminders.
+            </Text>
+
+            <Pressable
+              onPress={requestPermission}
+              style={{
+                marginTop: SPACING.xl,
+                minHeight: 56,
+                borderRadius: RADIUS.xl,
+                backgroundColor: COLORS.primary,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: SPACING.lg,
+              }}
+            >
+              <Text
+                style={{
+                  color: COLORS.white,
+                  fontWeight: "700",
+                  fontSize: TYPOGRAPHY.button || 15,
+                  textAlign: "center",
+                }}
+              >
+                Allow Notifications
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => Linking.openSettings()}
+              style={{
+                marginTop: SPACING.md,
+                minHeight: 56,
+                borderRadius: RADIUS.xl,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                backgroundColor: COLORS.white,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: SPACING.lg,
+              }}
+            >
+              <Text
+                style={{
+                  color: COLORS.text,
+                  fontWeight: "700",
+                  fontSize: TYPOGRAPHY.button || 15,
+                  textAlign: "center",
+                }}
+              >
+                Open Settings
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 

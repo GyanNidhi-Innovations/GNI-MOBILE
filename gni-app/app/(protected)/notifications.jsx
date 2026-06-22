@@ -13,6 +13,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
 import AppScreen from "@/components/common/AppScreen";
 import { COLORS } from "@/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function formatDateHeading(dateString) {
   const date = new Date(dateString);
@@ -52,6 +53,7 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const userId = user?.id || user?._id;
+  const insets = useSafeAreaInsets();
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -281,7 +283,7 @@ export default function NotificationsScreen() {
           flexGrow: 1,
           paddingHorizontal: 20,
           paddingTop: 8,
-          paddingBottom: 120,
+          paddingBottom: 140 + insets.bottom,
         }}
       />
     </AppScreen>

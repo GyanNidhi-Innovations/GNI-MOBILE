@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect  } from "react";
 import { useLocalSearchParams, router } from "expo-router";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import {
@@ -423,6 +423,26 @@ if (!fromAutoStop) {
 
     router.back();
   };
+
+  useEffect(() => {
+  return () => {
+    stopExamStatusPolling();
+
+    try {
+      hireAiLiveRef.current?.stop?.();
+    } catch {}
+
+    hireAiLiveRef.current = null;
+  };
+}, []);
+
+useEffect(() => {
+  return () => {
+    try {
+      cameraRef.current?.stopRecording?.();
+    } catch {}
+  };
+}, []);
 
   if (!permission) {
     return (

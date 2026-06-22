@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiClient } from "@/services/apiClient";
 
 import AppScreen from "@/components/common/AppScreen";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 
 import {
   COLORS,
@@ -23,7 +23,7 @@ export default function CalendarScreen() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
-  const insets = useSafeAreaInsets();
+  
 
   useEffect(() => {
     const fetchCalendarEvents = async () => {
@@ -115,14 +115,14 @@ if (loading) {
 }
 
   return (
-  <AppScreen
-    contentStyle={{
-  paddingTop: 8,
-  paddingBottom: 120,
-}}
-  >
+<AppScreen
+  bottomSpace={140}
+  contentStyle={{
+    paddingTop: 8,
+  }}
+>
       <View className="mb-7">
-        <Text className="text-[32px] font-bold text-[#101828]">Calendar</Text>
+        <Text className="text-[30px] font-bold text-[#101828]">Calendar</Text>
 
         <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
           Track upcoming events and open details directly from selected dates.
