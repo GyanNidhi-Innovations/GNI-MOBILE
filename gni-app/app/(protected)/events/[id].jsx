@@ -36,7 +36,27 @@ export default function EventDetailsScreen() {
       return registeredUserId?.toString() === userId?.toString();
     }) || false;
 
-  const isFull = false;
+  const getValidEventDate = () => {
+  if (!event?.date) return null;
+
+  const eventDate = new Date(event.date);
+
+  if (isNaN(eventDate.getTime())) return null;
+
+  return eventDate;
+};
+
+const eventDate = getValidEventDate();
+
+const isPastEvent = eventDate ? eventDate < new Date() : false;
+
+const seats = Number(event?.seats);
+
+const registeredCount = Array.isArray(event?.registeredUsers)
+  ? event.registeredUsers.length
+  : 0;
+
+const isFull = Number.isFinite(seats) && seats > 0 && registeredCount >= seats;
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -74,6 +94,10 @@ export default function EventDetailsScreen() {
         Alert.alert("Info", "You are already registered for this event");
         return;
       }
+      if (isPastEvent) {
+  Alert.alert("Info", "Registration is closed for this event");
+  return;
+}
 
       if (isFull) {
         Alert.alert("Info", "No seats available for this event");
@@ -105,13 +129,15 @@ export default function EventDetailsScreen() {
     }
   };
 
-  const getButtonText = () => {
-    if (isRegistered) return "Already Registered";
-    if (registering) return "Registering...";
-    return "Register Now";
-  };
+const getButtonText = () => {
+  if (isRegistered) return "Already Registered";
+  if (registering) return "Registering...";
+  if (isPastEvent) return "Registration Closed";
+  if (isFull) return "Seats Full";
+  return "Register Now";
+};
 
-  const disabled = isRegistered || registering;
+  const disabled = isRegistered || registering || isPastEvent || isFull;
 
   if (loading) {
     return (
@@ -234,9 +260,9 @@ export default function EventDetailsScreen() {
         <Pressable
           disabled={disabled}
           onPress={handleRegister}
-          className={`rounded-[22px] py-4 ${
-            disabled ? "bg-[#0062ff]" : "bg-[#0F5EFF]"
-          }`}
+         className={`rounded-[22px] py-4 ${
+  disabled ? "bg-[#98A2B3]" : "bg-[#0F5EFF]"
+}`}
         >
           <Text className="text-center text-[16px] font-semibold text-white">
             {getButtonText()}

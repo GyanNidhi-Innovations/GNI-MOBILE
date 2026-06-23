@@ -34,9 +34,10 @@ const EventSchema = new mongoose.Schema(
     },
 
     seats: {
-      type: Number,
-      default: 0,
-    },
+  type: Number,
+  default: null,
+  min: 0
+},
 
     registeredUsers: [
       {

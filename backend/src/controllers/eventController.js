@@ -6,8 +6,58 @@ import { admin } from "../config/firebaseAdmin.js";
 
 export const createEvent = async (req, res) => {
   try {
-    const event = await Event.create(req.body);
+    const {
+      title,
+      description,
+      date,
+      location,
+      organizer,
+      image,
+      seats: rawSeats,
+    } = req.body;
 
+    // ---------------- VALIDATION ----------------
+    if (
+      !title ||
+      !description ||
+      !date ||
+      !location ||
+      !organizer ||
+      !image
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    // ---------------- SEATS NORMALIZATION ----------------
+    let seats = null; // null = unlimited
+
+    if (
+      rawSeats !== "" &&
+      rawSeats !== null &&
+      rawSeats !== undefined
+    ) {
+      seats = Number(rawSeats);
+
+      if (isNaN(seats) || seats < 0) {
+        seats = 0;
+      }
+    }
+
+    // ---------------- CREATE EVENT FIRST ----------------
+    const event = await Event.create({
+      title,
+      description,
+      date,
+      location,
+      organizer,
+      image,
+      seats,
+    });
+
+    // ---------------- NOTIFICATIONS ----------------
     const tokens = await NotificationToken.find({ isActive: true }).lean();
 
     let successCount = 0;
@@ -38,8 +88,8 @@ export const createEvent = async (req, res) => {
         const batch = messages.slice(i, i + 500);
         const response = await admin.messaging().sendEach(batch);
 
-        successCount += response.successCount;
-        failureCount += response.failureCount;
+        successCount += response.successCount || 0;
+        failureCount += response.failureCount || 0;
       }
 
       await Notification.insertMany(
@@ -203,16 +253,25 @@ export const registerForEvent = async (req, res) => {
       });
     }
 
-    if (
-      typeof event.seats === "number" &&
-      event.seats > 0 &&
-      event.registeredUsers.length >= event.seats
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "No seats available",
-      });
-    }
+// ---------------- SEAT VALIDATION ----------------
+if (
+  event.seats !== null &&
+  event.seats !== undefined
+) {
+  if (event.seats <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "No seats available",
+    });
+  }
+
+  if (event.registeredUsers.length >= event.seats) {
+    return res.status(400).json({
+      success: false,
+      message: "No seats available",
+    });
+  }
+}
 
     event.registeredUsers.push(userId);
     await event.save();
