@@ -16,7 +16,7 @@ export const createEvent = async (req, res) => {
       seats: rawSeats,
     } = req.body;
 
-    // ---------------- VALIDATION ----------------
+    // ---------------- VALIDATION  ----------------
     if (
       !title ||
       !description ||
