@@ -1,21 +1,53 @@
+x-backend-common: &backend-common
+  restart: always
+
+  env_file:
+    - ${BACKEND_ENV_FILE:-/etc/gni-app-backend.env}
+
+  environment:
+    APP_RELEASE: ${APP_RELEASE:-unknown}
+
+  volumes:
+    - /srv/gni-app/uploads:/app/uploads
+
+  networks:
+    - gni-network
+
+  stop_grace_period: 30s
+
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "node",
+        "-e",
+        "fetch('http://127.0.0.1:5000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      ]
+    interval: 5s
+    timeout: 3s
+    retries: 12
+    start_period: 10s
+
 services:
-  backend:
-    build: .
-    container_name: gni-app-backend
-    restart: always
+  backend-blue:
+    <<: *backend-common
+
+    image: ${BACKEND_IMAGE:-gni-app-backend:latest}
+
+    container_name: gni-app-backend-blue
 
     ports:
-      - "5010:5000"
+      - "127.0.0.1:5011:5000"
 
-    env_file:
-      - /etc/gni-app-backend.env
+  backend-green:
+    <<: *backend-common
 
-    volumes:
-      # Optional: if your backend stores files (uploads, reports, etc.)
-      - /srv/gni-app/uploads:/app/uploads
+    image: ${BACKEND_IMAGE:-gni-app-backend:latest}
 
-    networks:
-      - gni-network
+    container_name: gni-app-backend-green
+
+    ports:
+      - "127.0.0.1:5012:5000"
 
 networks:
   gni-network:

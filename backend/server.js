@@ -33,10 +33,15 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Server is healthy",
+  const databaseConnected = mongoose.connection.readyState === 1;
+
+  res.status(databaseConnected ? 200 : 503).json({
+    success: databaseConnected,
+    status: databaseConnected ? "healthy" : "unhealthy",
+    database: databaseConnected ? "connected" : "disconnected",
+    release: process.env.APP_RELEASE || "unknown",
     uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
   });
 });
 
