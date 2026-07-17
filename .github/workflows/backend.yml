@@ -99,11 +99,39 @@ jobs:
             # ============================================
             # VERIFY REQUIRED FILES
             # ============================================
-            test -f backend/Dockerfile
-            test -f backend/docker-compose.yml
-            test -f backend/server.js
-            test -f /etc/gni-app-backend.env
-            test -x /usr/local/sbin/gni-switch-backend
+            echo "🔍 Verifying deployment requirements..."
+
+            test -f backend/Dockerfile || {
+              echo "❌ backend/Dockerfile is missing"
+              exit 1
+            }
+                    
+            test -f backend/docker-compose.yml || {
+              echo "❌ backend/docker-compose.yml is missing"
+              exit 1
+            }
+                    
+            test -f backend/server.js || {
+              echo "❌ backend/server.js is missing"
+              exit 1
+            }
+                    
+            test -f /etc/gni-app-backend.env || {
+              echo "❌ /etc/gni-app-backend.env is missing"
+              exit 1
+            }
+                    
+            test -f /usr/local/sbin/gni-switch-backend || {
+              echo "❌ Nginx switch script is missing"
+              exit 1
+            }
+                    
+            if ! sudo -n -l /usr/local/sbin/gni-switch-backend 5010 >/dev/null 2>&1; then
+              echo "❌ deploy user is not authorized to run the Nginx switch script"
+              exit 1
+            fi
+                    
+            echo "✅ Deployment requirements verified"
 
             cd backend
 
