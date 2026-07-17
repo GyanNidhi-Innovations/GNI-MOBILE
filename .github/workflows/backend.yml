@@ -2,11 +2,16 @@ name: Deploy GNI App Backend
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
       - "backend/**"
       - ".github/workflows/backend.yml"
+
   workflow_dispatch:
+
+concurrency:
+  group: gni-app-backend-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -16,112 +21,301 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Deploy Backend via SSH
+      - name: Deploy backend blue-green
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DROPLET_IP }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOYER_SSH_KEY }}
+
           script: |
-            # ============================================
-            # SETUP SSH KEY FOR GIT OPERATIONS
-            # ============================================
-            echo "🔑 Setting up SSH key for backend repository..."
-            mkdir -p ~/.ssh
-            cat > ~/.ssh/id_ed25519 << 'EOF'
-            ${{ secrets.REPO_SSH_KEY }}
-            EOF
-            chmod 600 ~/.ssh/id_ed25519
-            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            set -Eeuo pipefail
 
             # ============================================
-            # CREATE / UPDATE BACKEND PROJECT
+            # CONFIGURATION
             # ============================================
-            echo "📁 Preparing backend project directory..."
-
             APP_DIR="/home/deploy/gni-app-backend"
             REPO_URL="git@github.com:${{ github.repository }}.git"
 
+            COMPOSE_PROJECT="gni-app-backend"
+
+            STATE_DIR="/home/deploy/.gni-backend"
+            STATE_FILE="${STATE_DIR}/active-slot"
+
+            PUBLIC_HEALTH_URL="https://demos.gyannidhi.in/gni-mobile-api/health"
+
+            # ============================================
+            # CONFIGURE REPOSITORY SSH KEY
+            # ============================================
+            echo "🔑 Configuring repository SSH key..."
+
+            mkdir -p ~/.ssh
+
+            cat > ~/.ssh/id_ed25519 <<'EOF'
+            ${{ secrets.REPO_SSH_KEY }}
+            EOF
+
+            # Remove Windows carriage-return characters.
+            sed -i 's/\r$//' ~/.ssh/id_ed25519
+
+            chmod 600 ~/.ssh/id_ed25519
+
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+            if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+              echo "❌ REPO_SSH_KEY is not a valid private SSH key"
+              exit 1
+            fi
+
+            # ============================================
+            # CLONE OR UPDATE REPOSITORY
+            # ============================================
+            echo "📁 Preparing repository..."
+
             if [ ! -d "$APP_DIR/.git" ]; then
-              echo "📥 Project folder not found. Cloning repository..."
+              echo "📥 Repository not found. Cloning..."
+
               rm -rf "$APP_DIR"
-              GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git clone "$REPO_URL" "$APP_DIR"
+
+              GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" \
+                git clone "$REPO_URL" "$APP_DIR"
             fi
 
             cd "$APP_DIR"
 
-            echo "🔄 Updating to latest backend code..."
-            GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git fetch origin
-            GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" git reset --hard origin/main
+            echo "🔄 Updating repository..."
+
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes" \
+              git fetch origin
+
+            git reset --hard origin/main
             git clean -fd
 
-            # ============================================
-            # COPY ENVIRONMENT FILE
-            # ============================================
-            echo "📁 Copying backend environment file..."
-            [ -f "/etc/gni-app-backend.env" ] && cp /etc/gni-app-backend.env backend/.env || echo "⚠️ Backend env file not found"
+            RELEASE="$(git rev-parse --short=12 HEAD)"
+            IMAGE="gni-app-backend:${RELEASE}"
+
+            echo "📌 Deploying release: ${RELEASE}"
 
             # ============================================
-            # DEPLOY BACKEND CONTAINER
+            # VERIFY REQUIRED FILES
             # ============================================
-            echo "🏗️ Building gni-app-backend container..."
+            test -f backend/Dockerfile
+            test -f backend/docker-compose.yml
+            test -f backend/server.js
+            test -f /etc/gni-app-backend.env
+            test -x /usr/local/sbin/gni-switch-backend
 
             cd backend
 
-            if docker-compose -p gni-app-backend build --no-cache; then
-              echo "✅ Build successful! Starting backend deployment..."
+            # ============================================
+            # BUILD VERSIONED IMAGE
+            # ============================================
+            echo "🏗️ Building Docker image ${IMAGE}..."
 
-              echo "🔄 Attempting quick backend refresh..."
-              if timeout 30s docker-compose -p gni-app-backend up -d --force-recreate; then
-                echo "🎉 Quick backend deployment successful!"
-              else
-                echo "⚠️ Quick deployment failed. Using safe method..."
+            # Current backend remains online while this image builds.
+            docker build \
+              --pull \
+              --label com.gyannidhi.app=gni-app-backend \
+              --tag "$IMAGE" \
+              .
 
-                docker-compose -p gni-app-backend stop || true
-                docker-compose -p gni-app-backend up -d
-                echo "✅ Safe backend deployment completed!"
+            echo "✅ Docker image built successfully"
+
+            # ============================================
+            # DETERMINE ACTIVE AND INACTIVE SLOT
+            # ============================================
+            mkdir -p "$STATE_DIR"
+
+            ACTIVE_SLOT="legacy"
+
+            if [ -f "$STATE_FILE" ]; then
+              ACTIVE_SLOT="$(cat "$STATE_FILE")"
+            fi
+
+            case "$ACTIVE_SLOT" in
+              blue)
+                ACTIVE_PORT="5011"
+                ACTIVE_CONTAINER="gni-app-backend-blue"
+
+                INACTIVE_SLOT="green"
+                INACTIVE_PORT="5012"
+                INACTIVE_SERVICE="backend-green"
+                INACTIVE_CONTAINER="gni-app-backend-green"
+                ;;
+
+              green)
+                ACTIVE_PORT="5012"
+                ACTIVE_CONTAINER="gni-app-backend-green"
+
+                INACTIVE_SLOT="blue"
+                INACTIVE_PORT="5011"
+                INACTIVE_SERVICE="backend-blue"
+                INACTIVE_CONTAINER="gni-app-backend-blue"
+                ;;
+
+              legacy|*)
+                # First blue-green deployment.
+                # Current production backend remains on port 5010.
+                ACTIVE_SLOT="legacy"
+                ACTIVE_PORT="5010"
+                ACTIVE_CONTAINER="gni-app-backend"
+
+                INACTIVE_SLOT="blue"
+                INACTIVE_PORT="5011"
+                INACTIVE_SERVICE="backend-blue"
+                INACTIVE_CONTAINER="gni-app-backend-blue"
+                ;;
+            esac
+
+            echo "Current active slot: ${ACTIVE_SLOT}"
+            echo "Current active port: ${ACTIVE_PORT}"
+            echo "Deploying new release to: ${INACTIVE_SLOT}"
+            echo "New release port: ${INACTIVE_PORT}"
+
+            # ============================================
+            # START INACTIVE SLOT
+            # ============================================
+            docker rm -f "$INACTIVE_CONTAINER" >/dev/null 2>&1 || true
+
+            BACKEND_IMAGE="$IMAGE" \
+            APP_RELEASE="$RELEASE" \
+            BACKEND_ENV_FILE="/etc/gni-app-backend.env" \
+              docker compose \
+                -p "$COMPOSE_PROJECT" \
+                up \
+                -d \
+                --no-deps \
+                --no-build \
+                --force-recreate \
+                "$INACTIVE_SERVICE"
+
+            # ============================================
+            # CHECK NEW BACKEND LOCALLY
+            # ============================================
+            echo "🔍 Waiting for the new backend..."
+
+            NEW_SLOT_READY=false
+
+            for attempt in $(seq 1 30); do
+              HEALTH_BODY="$(
+                curl \
+                  --fail \
+                  --silent \
+                  --show-error \
+                  --connect-timeout 3 \
+                  --max-time 10 \
+                  "http://127.0.0.1:${INACTIVE_PORT}/health" \
+                  2>/dev/null || true
+              )"
+
+              if echo "$HEALTH_BODY" | grep -q "$RELEASE"; then
+                NEW_SLOT_READY=true
+                echo "✅ New backend is healthy"
+                echo "$HEALTH_BODY"
+                break
               fi
+
+              echo "Backend not ready: attempt ${attempt}/30"
+              sleep 2
+            done
+
+            if [ "$NEW_SLOT_READY" != "true" ]; then
+              echo "❌ New backend failed its health check"
+
+              docker logs \
+                --tail=200 \
+                "$INACTIVE_CONTAINER" || true
+
+              docker rm -f "$INACTIVE_CONTAINER" || true
+              exit 1
+            fi
+
+            # ============================================
+            # SWITCH NGINX
+            # ============================================
+            echo "🔀 Switching Nginx to port ${INACTIVE_PORT}..."
+
+            sudo /usr/local/sbin/gni-switch-backend "$INACTIVE_PORT"
+
+            # ============================================
+            # VERIFY PUBLIC API
+            # ============================================
+            echo "🌐 Verifying public API..."
+
+            PUBLIC_READY=false
+
+            for attempt in $(seq 1 20); do
+              PUBLIC_BODY="$(
+                curl \
+                  --fail \
+                  --silent \
+                  --show-error \
+                  --connect-timeout 5 \
+                  --max-time 15 \
+                  "$PUBLIC_HEALTH_URL" \
+                  2>/dev/null || true
+              )"
+
+              if echo "$PUBLIC_BODY" | grep -q "$RELEASE"; then
+                PUBLIC_READY=true
+                echo "✅ Public API is serving release ${RELEASE}"
+                break
+              fi
+
+              echo "Public API not switched yet: attempt ${attempt}/20"
+              sleep 2
+            done
+
+            # ============================================
+            # ROLLBACK WHEN PUBLIC CHECK FAILS
+            # ============================================
+            if [ "$PUBLIC_READY" != "true" ]; then
+              echo "❌ Public API verification failed"
+              echo "↩️ Returning Nginx to port ${ACTIVE_PORT}"
+
+              sudo /usr/local/sbin/gni-switch-backend "$ACTIVE_PORT"
+
+              docker rm -f "$INACTIVE_CONTAINER" || true
+
+              exit 1
+            fi
+
+            # ============================================
+            # SAVE ACTIVE SLOT
+            # ============================================
+            printf '%s\n' "$INACTIVE_SLOT" > "${STATE_FILE}.tmp"
+            mv "${STATE_FILE}.tmp" "$STATE_FILE"
+
+            # Give existing requests time to complete.
+            sleep 20
+
+            # ============================================
+            # STOP PREVIOUS BACKEND
+            # ============================================
+            if [ "$ACTIVE_SLOT" = "legacy" ]; then
+              echo "🧹 Removing legacy backend container..."
+
+              docker rm -f \
+                "$ACTIVE_CONTAINER" >/dev/null 2>&1 || true
             else
-              echo "❌ Backend build failed! Old version remains running."
-              exit 1
+              echo "🛑 Stopping previous ${ACTIVE_SLOT} backend..."
+
+              docker stop \
+                --time 30 \
+                "$ACTIVE_CONTAINER" >/dev/null 2>&1 || true
             fi
 
-            # ============================================
-            # HEALTH CHECKS
-            # ============================================
-            echo "🔍 Verifying backend container health..."
-            sleep 15
-
-            if ! docker ps --filter "name=gni-app-backend" --filter "status=running" --format "{{.Names}}" | grep -q gni-app-backend; then
-              echo "❌ Backend container health check failed"
-              docker-compose -p gni-app-backend down && docker-compose -p gni-app-backend up -d
-              exit 1
-            fi
+            # Remove only dangling image layers.
+            docker image prune -f >/dev/null 2>&1 || true
 
             # ============================================
-            # CONNECTIVITY TEST
+            # FINAL STATUS
             # ============================================
-            echo "🌐 Testing backend connectivity..."
+            echo "📦 Backend containers:"
 
-            if curl -s --retry 3 --retry-delay 5 --max-time 10 http://localhost:5010/ > /dev/null; then
-              echo "✅ Backend root endpoint is responding"
-            elif curl -s --retry 3 --retry-delay 5 --max-time 10 http://localhost:5010/api > /dev/null; then
-              echo "✅ Backend API endpoint is responding"
-            elif curl -s --retry 3 --retry-delay 5 --max-time 10 http://localhost:5010/api/health > /dev/null; then
-              echo "✅ Backend health endpoint is responding"
-            else
-              echo "❌ Backend connectivity test failed"
-              docker-compose -p gni-app-backend down && docker-compose -p gni-app-backend up -d
-              exit 1
-            fi
+            docker ps -a \
+              --filter "name=gni-app-backend" \
+              --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
-            # ============================================
-            # CLEANUP AND FINAL STATUS
-            # ============================================
-            echo "🧹 Cleaning up unused Docker images..."
-            docker image prune -f
-
-            echo "📦 Current backend container:"
-            docker ps --filter "name=gni-app-backend" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-            echo "✅ 🚀 GNI App Backend deployment completed successfully!"
+            echo "🎯 Active slot: $(cat "$STATE_FILE")"
+            echo "✅ Deployment completed successfully: ${RELEASE}"
