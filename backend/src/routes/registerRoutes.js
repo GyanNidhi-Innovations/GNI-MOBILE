@@ -5,6 +5,8 @@ import {
   loginRegistrationUser,
   registerUser,
   forgotRegistrationPassword,
+  requestRegistrationPasswordOtp,
+  verifyRegistrationPasswordOtp,
   validateRegistrationResetToken,
   resetRegistrationPassword,
 } from "../controllers/registerController.js";
@@ -16,5 +18,15 @@ router.post("/forgot-password", forgotRegistrationPassword);
 router.get("/reset-password/validate/:token", validateRegistrationResetToken);
 router.post("/reset-password/:token", resetRegistrationPassword);
 router.post("/signup", upload.single("resume"), registerUser);
+
+router.post(
+  "/mobile/forgot-password/request-otp",
+  requestRegistrationPasswordOtp,
+);
+
+router.post(
+  "/mobile/forgot-password/verify-otp",
+  verifyRegistrationPasswordOtp,
+);
 
 export default router;

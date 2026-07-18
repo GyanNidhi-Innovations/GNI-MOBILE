@@ -283,6 +283,311 @@ console.log(
     }
   };
 
+  export const requestRegistrationPasswordOtp = async (
+  req,
+  res,
+) => {
+  try {
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const genericMessage =
+      "If an account exists for this email, a verification code has been sent.";
+
+    const user = await Registration.findOne({
+      email,
+    }).select(
+      "+resetPasswordOtp " +
+        "+resetPasswordOtpExpires " +
+        "+resetPasswordOtpAttempts " +
+        "+resetPasswordOtpSentAt",
+    );
+
+    // Do not reveal whether the email exists.
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: genericMessage,
+      });
+    }
+
+    // Allow one OTP email per minute.
+    if (
+      user.resetPasswordOtpSentAt &&
+      Date.now() -
+        new Date(
+          user.resetPasswordOtpSentAt,
+        ).getTime() <
+        60 * 1000
+    ) {
+      return res.status(429).json({
+        success: false,
+        message:
+          "Please wait one minute before requesting another code.",
+      });
+    }
+
+    const otp = String(
+      crypto.randomInt(100000, 1000000),
+    );
+
+    const hashedOtp = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    user.resetPasswordOtp = hashedOtp;
+    user.resetPasswordOtpExpires = new Date(
+      Date.now() + 10 * 60 * 1000,
+    );
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordOtpSentAt = new Date();
+
+    await user.save();
+
+    await mailTransporter.sendMail({
+      from:
+        process.env.SMTP_FROM ||
+        '"GyanNidhi" <support@gyannidhi.in>',
+
+      to: user.email,
+
+      subject:
+        "Your GyanNidhi password reset code",
+
+      text: [
+        `Hello ${user.name || "User"},`,
+        "",
+        "Use this verification code to reset your password:",
+        "",
+        otp,
+        "",
+        "This code expires in 10 minutes.",
+        "Do not share this code with anyone.",
+        "",
+        "Ignore this email if you did not request this.",
+      ].join("\n"),
+
+      html: `
+        <div style="
+          max-width:560px;
+          margin:0 auto;
+          padding:24px;
+          font-family:Arial,sans-serif;
+          color:#101828;
+        ">
+          <h2>Reset your password</h2>
+
+          <p>Hello ${user.name || "User"},</p>
+
+          <p>
+            Enter this verification code in the
+            GyanNidhi app:
+          </p>
+
+          <div style="
+            margin:28px 0;
+            padding:18px;
+            background:#F2F4F7;
+            border-radius:12px;
+            text-align:center;
+            font-size:32px;
+            font-weight:700;
+            letter-spacing:10px;
+          ">
+            ${otp}
+          </div>
+
+          <p>This code expires in 10 minutes.</p>
+
+          <p style="
+            color:#667085;
+            font-size:13px;
+          ">
+            Do not share this code with anyone.
+          </p>
+        </div>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: genericMessage,
+    });
+  } catch (error) {
+    console.error(
+      "requestRegistrationPasswordOtp error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to send the verification code",
+    });
+  }
+};
+
+export const verifyRegistrationPasswordOtp = async (
+  req,
+  res,
+) => {
+  try {
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+
+    const otp = String(req.body?.otp || "")
+      .trim();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid 6-digit code",
+      });
+    }
+
+    const user = await Registration.findOne({
+      email,
+    }).select(
+      "+resetPasswordOtp " +
+        "+resetPasswordOtpExpires " +
+        "+resetPasswordOtpAttempts " +
+        "+resetPasswordOtpSentAt " +
+        "+resetPasswordToken " +
+        "+resetPasswordExpires",
+    );
+
+    if (
+      !user ||
+      !user.resetPasswordOtp ||
+      !user.resetPasswordOtpExpires ||
+      new Date(
+        user.resetPasswordOtpExpires,
+      ).getTime() <= Date.now()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid or expired verification code",
+      });
+    }
+
+    const attempts = Number(
+      user.resetPasswordOtpAttempts || 0,
+    );
+
+    if (attempts >= 5) {
+      user.resetPasswordOtp = undefined;
+      user.resetPasswordOtpExpires = undefined;
+      user.resetPasswordOtpAttempts = 0;
+      user.resetPasswordOtpSentAt = undefined;
+
+      await user.save();
+
+      return res.status(429).json({
+        success: false,
+        message:
+          "Too many incorrect attempts. Request a new code.",
+      });
+    }
+
+    const suppliedOtpHash = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    const storedBuffer = Buffer.from(
+      user.resetPasswordOtp,
+      "hex",
+    );
+
+    const suppliedBuffer = Buffer.from(
+      suppliedOtpHash,
+      "hex",
+    );
+
+    const otpMatches =
+      storedBuffer.length ===
+        suppliedBuffer.length &&
+      crypto.timingSafeEqual(
+        storedBuffer,
+        suppliedBuffer,
+      );
+
+    if (!otpMatches) {
+      user.resetPasswordOtpAttempts =
+        attempts + 1;
+
+      await user.save();
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid or expired verification code",
+      });
+    }
+
+    // Generate the temporary token expected by your
+    // existing reset-password screen and API.
+    const rawResetToken = crypto
+      .randomBytes(32)
+      .toString("hex");
+
+    const hashedResetToken = crypto
+      .createHash("sha256")
+      .update(rawResetToken)
+      .digest("hex");
+
+    user.resetPasswordToken =
+      hashedResetToken;
+
+    user.resetPasswordExpires = new Date(
+      Date.now() + 15 * 60 * 1000,
+    );
+
+    // OTP can only be used once.
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordOtpExpires = undefined;
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordOtpSentAt = undefined;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Code verified successfully",
+      resetToken: rawResetToken,
+    });
+  } catch (error) {
+    console.error(
+      "verifyRegistrationPasswordOtp error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Unable to verify the verification code",
+    });
+  }
+};
+
 export const validateRegistrationResetToken =
   async (req, res) => {
     try {
@@ -310,9 +615,11 @@ export const validateRegistrationResetToken =
           resetPasswordExpires: {
             $gt: new Date(),
           },
-        }).select(
-          "name email type",
-        );
+         }).select(
+        "name email type " +
+          "+resetPasswordToken " +
+          "+resetPasswordExpires",
+      );
 
       if (!user) {
         return res.status(400).json({
@@ -391,7 +698,10 @@ export const resetRegistrationPassword =
           resetPasswordExpires: {
             $gt: new Date(),
           },
-        });
+        }).select(
+        "+resetPasswordToken " +
+          "+resetPasswordExpires",
+      );
 
       if (!user) {
         return res.status(400).json({

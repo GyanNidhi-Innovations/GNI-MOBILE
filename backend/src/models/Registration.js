@@ -25,6 +25,28 @@ const RegistrationSchema = new mongoose.Schema(
     experience: String,
     careerGoals: String,
     password: { type: String, required: true },
+    
+    resetPasswordOtp: {
+    type: String,
+    select: false,
+  },
+  
+  resetPasswordOtpExpires: {
+    type: Date,
+    select: false,
+  },
+  
+  resetPasswordOtpAttempts: {
+    type: Number,
+    default: 0,
+    select: false,
+  },
+  
+  resetPasswordOtpSentAt: {
+    type: Date,
+    select: false,
+  },
+
     resetPasswordToken: String,
     resetPasswordExpires: Date,
   },
