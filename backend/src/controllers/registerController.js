@@ -178,6 +178,13 @@ export const forgotRegistrationPassword =
 
       await user.save();
 
+      console.log("RESET RAW TOKEN:", rawToken);
+
+console.log(
+  "RESET HASH TOKEN:",
+  hashedToken
+);
+
       const resetBaseUrl =
         process.env
           .MOBILE_RESET_PASSWORD_URL ||
@@ -186,6 +193,9 @@ export const forgotRegistrationPassword =
       const resetLink =
         `${resetBaseUrl}` +
         `?token=${encodeURIComponent(rawToken)}`;
+
+
+        console.log("RESET LINK:", resetLink);
 
       await mailTransporter.sendMail({
         from:
@@ -401,6 +411,8 @@ export const resetRegistrationPassword =
         undefined;
 
       await user.save();
+
+      
 
       try {
         await mailTransporter.sendMail({
