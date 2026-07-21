@@ -127,6 +127,8 @@ export const createEvent = async (
                 screen: "events",
                 eventId:
                   String(event._id),
+                  imageUrl:
+                    event.image,
               },
 
               deliveryStatus:
@@ -148,11 +150,17 @@ export const createEvent = async (
             body:
               notificationBody,
 
+            imageUrl:
+              event.image,
+
             data: {
               type: "event",
               screen: "events",
               eventId:
                 String(event._id),
+               
+              imageUrl:
+                event.image,
             },
           });
 

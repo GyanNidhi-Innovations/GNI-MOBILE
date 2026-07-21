@@ -140,6 +140,7 @@ export async function sendPushToDeviceRecords({
   title,
   body,
   data = {},
+  imageUrl = "",
 }) {
   const uniqueDevices =
     dedupeDeviceRecords(deviceRecords);
@@ -174,35 +175,47 @@ export async function sendPushToDeviceRecords({
       (device) => device.token,
     );
 
-    const response = await admin
-      .messaging()
-      .sendEachForMulticast({
-        tokens: tokenValues,
+   const response = await admin
+  .messaging()
+  .sendEachForMulticast({
+    tokens: tokenValues,
 
-        notification: {
-          title,
-          body,
+    notification: {
+      title,
+      body,
+
+      ...(imageUrl
+        ? {
+            imageUrl,
+          }
+        : {}),
+    },
+
+    data: stringData,
+
+    android: {
+      priority: "high",
+
+      notification: {
+        channelId: "default",
+        sound: "default",
+
+        ...(imageUrl
+          ? {
+              imageUrl,
+            }
+          : {}),
+      },
+    },
+
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
         },
-
-        data: stringData,
-
-        android: {
-          priority: "high",
-
-          notification: {
-            channelId: "default",
-            sound: "default",
-          },
-        },
-
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-            },
-          },
-        },
-      });
+      },
+    },
+  });
 
     response.responses.forEach(
       (firebaseResult, index) => {
