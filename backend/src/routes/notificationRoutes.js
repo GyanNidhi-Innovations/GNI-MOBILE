@@ -1,6 +1,7 @@
 import express from "express";
 import {
   registerDeviceToken,
+  deactivateDeviceToken,
   getMyNotifications,
   markNotificationRead,
   sendToUser,
@@ -12,6 +13,10 @@ import {
 const router = express.Router();
 
 router.post("/register-token", registerDeviceToken);
+router.post(
+  "/deactivate-token",
+  deactivateDeviceToken,
+);
 router.get("/user/:userId", getMyNotifications);
 router.patch("/:id/read", markNotificationRead);
 router.post("/send", sendToUser);

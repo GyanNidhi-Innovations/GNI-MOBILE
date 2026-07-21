@@ -1,36 +1,187 @@
+import mongoose from "mongoose";
+
 import NotificationToken from "../models/NotificationToken.js";
 import Notification from "../models/Notification.js";
 import { admin } from "../config/firebaseAdmin.js";
 
-export async function registerDeviceToken(req, res) {
-  try {
-    const { userId, token, platform, deviceName } = req.body;
+import {
+  buildUserDeliveryMap,
+  dedupeDeviceRecords,
+  sendPushToDeviceRecords,
+  stringifyNotificationData,
+  uniqueUserIdsFromDevices,
+} from "../services/pushNotificationService.js";
 
-    if (!userId || !token) {
+async function updateInboxDeliveryStatuses(
+  inboxDocuments,
+  deliveryMap,
+) {
+  if (!inboxDocuments.length) return;
+
+  const now = new Date();
+
+  const operations =
+    inboxDocuments.map((document) => {
+      const userId = String(
+        document.userId,
+      );
+
+      const delivery =
+        deliveryMap.get(userId);
+
+      const delivered =
+        (delivery?.successCount || 0) >
+        0;
+
+      return {
+        updateOne: {
+          filter: {
+            _id: document._id,
+          },
+
+          update: {
+            $set: {
+              deliveryStatus: delivered
+                ? "sent"
+                : "failed",
+
+              sentAt: now,
+
+              failureReason:
+                delivered
+                  ? ""
+                  : (
+                      delivery?.errors ||
+                      []
+                    ).join(", ") ||
+                    "Push delivery failed",
+            },
+          },
+        },
+      };
+    });
+
+  await Notification.bulkWrite(
+    operations,
+  );
+}
+
+export async function registerDeviceToken(
+  req,
+  res,
+) {
+  try {
+    const {
+      userId,
+      installationId,
+      token,
+      platform,
+      deviceName,
+    } = req.body;
+
+    const cleanInstallationId =
+      String(
+        installationId || "",
+      ).trim();
+
+    const cleanToken = String(
+      token || "",
+    ).trim();
+
+    if (
+      !userId ||
+      !cleanInstallationId ||
+      !cleanToken
+    ) {
       return res.status(400).json({
         success: false,
-        message: "userId and token are required",
+        message:
+          "userId, installationId and token are required",
       });
     }
 
-    const saved = await NotificationToken.findOneAndUpdate(
-      { token },
-      {
+    if (
+      !mongoose.Types.ObjectId.isValid(
         userId,
-        token,
-        platform: platform || "unknown",
-        deviceName: deviceName || "",
-        isActive: true,
-        lastSeenAt: new Date(),
-      },
-      { new: true, upsert: true }
-    );
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid userId",
+      });
+    }
 
-    return res.json({
+    /*
+     * Remove any legacy row that owns the same
+     * Firebase token under another installation.
+     */
+    await NotificationToken.deleteMany({
+      token: cleanToken,
+
+      installationId: {
+        $ne: cleanInstallationId,
+      },
+    });
+
+    /*
+     * Upsert by installationId.
+     *
+     * Same phone + refreshed token:
+     * updates this record.
+     *
+     * Second phone:
+     * creates a second record.
+     *
+     * Same phone + different account:
+     * reassigns this installation to that account.
+     */
+    const saved =
+      await NotificationToken
+        .findOneAndUpdate(
+          {
+            installationId:
+              cleanInstallationId,
+          },
+          {
+            $set: {
+              userId,
+              installationId:
+                cleanInstallationId,
+
+              token: cleanToken,
+
+              platform:
+                platform || "unknown",
+
+              deviceName:
+                deviceName || "",
+
+              isActive: true,
+              lastSeenAt: new Date(),
+
+              failureReason: "",
+              lastFailedAt: null,
+            },
+          },
+          {
+            new: true,
+            upsert: true,
+            runValidators: true,
+          },
+        );
+
+    return res.status(200).json({
       success: true,
-      token: saved,
+      message:
+        "Notification device registered",
+      device: saved,
     });
   } catch (error) {
+    console.error(
+      "registerDeviceToken error:",
+      error,
+    );
+
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -38,19 +189,97 @@ export async function registerDeviceToken(req, res) {
   }
 }
 
-export async function getMyNotifications(req, res) {
+export async function deactivateDeviceToken(
+  req,
+  res,
+) {
+  try {
+    const {
+      userId,
+      installationId,
+    } = req.body;
+
+    if (!userId || !installationId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "userId and installationId are required",
+      });
+    }
+
+    await NotificationToken.updateOne(
+      {
+        userId,
+        installationId,
+      },
+      {
+        $set: {
+          isActive: false,
+          lastSeenAt: new Date(),
+        },
+      },
+    );
+
+    /*
+     * Return success even if it was already
+     * inactive. Logout should be idempotent.
+     */
+    return res.status(200).json({
+      success: true,
+      message:
+        "This installation was deactivated",
+    });
+  } catch (error) {
+    console.error(
+      "deactivateDeviceToken error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
+export async function getMyNotifications(
+  req,
+  res,
+) {
   try {
     const { userId } = req.params;
 
-    const notifications = await Notification.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(100);
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        userId,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid userId",
+      });
+    }
 
-    return res.json({
+    const notifications =
+      await Notification.find({
+        userId,
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .limit(100)
+        .lean();
+
+    return res.status(200).json({
       success: true,
       notifications,
     });
   } catch (error) {
+    console.error(
+      "getMyNotifications error:",
+      error,
+    );
+
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -58,21 +287,55 @@ export async function getMyNotifications(req, res) {
   }
 }
 
-export async function markNotificationRead(req, res) {
+export async function markNotificationRead(
+  req,
+  res,
+) {
   try {
     const { id } = req.params;
 
-    const updated = await Notification.findByIdAndUpdate(
-      id,
-      { read: true },
-      { new: true }
-    );
+    if (
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid notification id",
+      });
+    }
 
-    return res.json({
+    const updated =
+      await Notification
+        .findByIdAndUpdate(
+          id,
+          {
+            $set: {
+              read: true,
+            },
+          },
+          {
+            new: true,
+          },
+        );
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Notification not found",
+      });
+    }
+
+    return res.status(200).json({
       success: true,
       notification: updated,
     });
   } catch (error) {
+    console.error(
+      "markNotificationRead error:",
+      error,
+    );
+
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -80,153 +343,252 @@ export async function markNotificationRead(req, res) {
   }
 }
 
-export async function sendToUser(req, res) {
+export async function sendToUser(
+  req,
+  res,
+) {
+  let inboxNotification = null;
+
   try {
-    const { userId, title, body, type, data } = req.body;
-
-    if (!userId || !title || !body) {
-      return res.status(400).json({
-        success: false,
-        message: "userId, title, and body are required",
-      });
-    }
-
-    const tokens = await NotificationToken.find({
-      userId,
-      isActive: true,
-    });
-
-    if (!tokens.length) {
-      const notif = await Notification.create({
-        userId,
-        title,
-        body,
-        type: type || "system",
-        data: data || {},
-        deliveryStatus: "failed",
-        failureReason: "No active device tokens",
-      });
-
-      return res.status(404).json({
-        success: false,
-        message: "No active device tokens found",
-        notification: notif,
-      });
-    }
-
-    const tokenValues = tokens.map((t) => t.token);
-
-    const message = {
-      tokens: tokenValues,
-      notification: {
-        title,
-        body,
-      },
-      data: Object.fromEntries(
-        Object.entries(data || {}).map(([k, v]) => [k, String(v)])
-      ),
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "default",
-          sound: "default",
-        },
-      },
-    };
-
-    const response = await admin.messaging().sendEachForMulticast(message);
-
-    const failures = response.responses.map((r, index) => ({
-      tokenLast10: tokenValues[index]?.slice(-10),
-      success: r.success,
-      errorCode: r.error?.code || null,
-      errorMessage: r.error?.message || null,
-    }));
-
-    const failedOnly = failures.filter((f) => !f.success);
-
-    await Notification.create({
+    const {
       userId,
       title,
       body,
-      type: type || "system",
-      data: data || {},
-      deliveryStatus:
-        response.failureCount === 0
-          ? "sent"
-          : response.successCount > 0
-          ? "partial"
-          : "failed",
-      failureReason:
-        failedOnly.length > 0
-          ? failedOnly.map((f) => f.errorCode).join(", ")
-          : "",
-      sentAt: new Date(),
-    });
+      type = "system",
+      data = {},
+    } = req.body;
 
-    for (let index = 0; index < response.responses.length; index++) {
-      const r = response.responses[index];
+    const cleanTitle = String(
+      title || "",
+    ).trim();
 
-      if (!r.success) {
-        const code = r.error?.code || "";
+    const cleanBody = String(
+      body || "",
+    ).trim();
 
-        if (
-          code.includes("registration-token-not-registered") ||
-          code.includes("invalid-registration-token") ||
-          code.includes("invalid-argument")
-        ) {
-          await NotificationToken.findOneAndUpdate(
-            { token: tokenValues[index] },
-            {
-              isActive: false,
-              failureReason: code,
-              lastFailedAt: new Date(),
-            }
-          );
-        }
-      }
+    if (
+      !userId ||
+      !cleanTitle ||
+      !cleanBody
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "userId, title and body are required",
+      });
     }
 
-    return res.json({
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        userId,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid userId",
+      });
+    }
+
+    const rawDevices =
+      await NotificationToken.find({
+        userId,
+        isActive: true,
+      }).lean();
+
+    const devices =
+      dedupeDeviceRecords(rawDevices);
+
+    /*
+     * Store the Alerts record before Firebase
+     * sends the push.
+     *
+     * When the mobile push listener runs, the
+     * Alerts record already exists.
+     */
+    inboxNotification =
+      await Notification.create({
+        userId,
+        title: cleanTitle,
+        body: cleanBody,
+        type,
+        data,
+        deliveryStatus:
+          devices.length > 0
+            ? "queued"
+            : "failed",
+        read: false,
+        failureReason:
+          devices.length > 0
+            ? ""
+            : "No active device registrations",
+      });
+
+    if (devices.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No active device registrations found",
+        notification:
+          inboxNotification,
+      });
+    }
+
+    const pushResult =
+      await sendPushToDeviceRecords({
+        deviceRecords: devices,
+        title: cleanTitle,
+        body: cleanBody,
+
+        data: {
+          ...data,
+          type,
+          screen:
+            data.screen ||
+            "notifications",
+        },
+      });
+
+    const deliveryMap =
+      buildUserDeliveryMap(
+        pushResult.results,
+      );
+
+    await updateInboxDeliveryStatuses(
+      [inboxNotification],
+      deliveryMap,
+    );
+
+    return res.status(200).json({
       success: true,
-      message: "Notification processed",
-      result: {
-        successCount: response.successCount,
-        failureCount: response.failureCount,
-        failures: failedOnly,
-      },
+      message:
+        "Notification processed",
+      totalDevices:
+        pushResult.uniqueDevices.length,
+      successCount:
+        pushResult.successCount,
+      failureCount:
+        pushResult.failureCount,
+      invalidTokensDisabled:
+        pushResult
+          .invalidTokensDisabled,
     });
   } catch (error) {
-    console.error("sendToUser error:", error);
+    console.error(
+      "sendToUser error:",
+      error,
+    );
+
+    if (inboxNotification?._id) {
+      await Notification.updateOne(
+        {
+          _id: inboxNotification._id,
+        },
+        {
+          $set: {
+            deliveryStatus: "failed",
+            sentAt: new Date(),
+            failureReason:
+              error.message,
+          },
+        },
+      ).catch(() => {});
+    }
 
     return res.status(500).json({
       success: false,
       message: error.message,
-      code: error.code || null,
     });
   }
 }
 
-export async function sendToTopic(req, res) {
+export async function sendToTopic(
+  req,
+  res,
+) {
   try {
-    const { topic, title, body, data } = req.body;
-
-    const response = await admin.messaging().send({
+    const {
       topic,
-      notification: { title, body },
-      data: Object.fromEntries(
-        Object.entries(data || {}).map(([k, v]) => [k, String(v)])
-      ),
-      android: {
-        priority: "high",
-      },
-    });
+      title,
+      body,
+      type = "system",
+      data = {},
+    } = req.body;
 
-    return res.json({
+    const cleanTopic = String(
+      topic || "",
+    ).trim();
+
+    const cleanTitle = String(
+      title || "",
+    ).trim();
+
+    const cleanBody = String(
+      body || "",
+    ).trim();
+
+    if (
+      !cleanTopic ||
+      !cleanTitle ||
+      !cleanBody
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "topic, title and body are required",
+      });
+    }
+
+    const messageId =
+      await admin.messaging().send({
+        topic: cleanTopic,
+
+        notification: {
+          title: cleanTitle,
+          body: cleanBody,
+        },
+
+        data:
+          stringifyNotificationData({
+            ...data,
+            type,
+            screen:
+              data.screen ||
+              "notifications",
+          }),
+
+        android: {
+          priority: "high",
+
+          notification: {
+            channelId: "default",
+            sound: "default",
+          },
+        },
+
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+            },
+          },
+        },
+      });
+
+    /*
+     * A topic push is push-only here because this
+     * backend currently does not store a database
+     * list of topic members.
+     */
+    return res.status(200).json({
       success: true,
-      messageId: response,
+      messageId,
     });
   } catch (error) {
+    console.error(
+      "sendToTopic error:",
+      error,
+    );
+
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -234,20 +596,40 @@ export async function sendToTopic(req, res) {
   }
 }
 
-export async function getUnreadCount(req, res) {
+export async function getUnreadCount(
+  req,
+  res,
+) {
   try {
     const { userId } = req.params;
 
-    const count = await Notification.countDocuments({
-      userId,
-      read: false,
-    });
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        userId,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid userId",
+      });
+    }
 
-    return res.json({
+    const count =
+      await Notification.countDocuments({
+        userId,
+        read: false,
+      });
+
+    return res.status(200).json({
       success: true,
       count,
     });
   } catch (error) {
+    console.error(
+      "getUnreadCount error:",
+      error,
+    );
+
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -255,96 +637,155 @@ export async function getUnreadCount(req, res) {
   }
 }
 
-export async function sendToAllUsers(req, res) {
-  try {
-    const { title, body, type = "system", data = {} } = req.body;
+export async function sendToAllUsers(
+  req,
+  res,
+) {
+  let inboxDocuments = [];
 
-    if (!title || !body) {
+  try {
+    const {
+      title,
+      body,
+      type = "system",
+      data = {},
+    } = req.body;
+
+    const cleanTitle = String(
+      title || "",
+    ).trim();
+
+    const cleanBody = String(
+      body || "",
+    ).trim();
+
+    if (!cleanTitle || !cleanBody) {
       return res.status(400).json({
         success: false,
-        message: "title and body are required",
+        message:
+          "title and body are required",
       });
     }
 
-    const tokens = await NotificationToken.find({ isActive: true }).lean();
+    const rawDevices =
+      await NotificationToken.find({
+        isActive: true,
+      }).lean();
 
-    if (!tokens.length) {
+    const devices =
+      dedupeDeviceRecords(rawDevices);
+
+    if (devices.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No active notification tokens found",
+        message:
+          "No active notification devices found",
       });
     }
 
-    const messages = tokens.map((item) => ({
-      token: item.token,
-      notification: {
-        title,
-        body,
-      },
-      data: Object.fromEntries(
-        Object.entries({
+    const uniqueUserIds =
+      uniqueUserIdsFromDevices(
+        devices,
+      );
+
+    /*
+     * One Alerts record per user.
+     *
+     * Store these records before sending FCM so
+     * the mobile received-listener can immediately
+     * retrieve them.
+     */
+    inboxDocuments =
+      await Notification.insertMany(
+        uniqueUserIds.map(
+          (userId) => ({
+            userId,
+            title: cleanTitle,
+            body: cleanBody,
+            type,
+            data,
+            deliveryStatus: "queued",
+            read: false,
+          }),
+        ),
+      );
+
+    /*
+     * One FCM push per unique device token.
+     */
+    const pushResult =
+      await sendPushToDeviceRecords({
+        deviceRecords: devices,
+        title: cleanTitle,
+        body: cleanBody,
+
+        data: {
           ...data,
           type,
-          screen: data.screen || "notifications",
-        }).map(([key, value]) => [key, String(value)])
-      ),
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "default",
-          sound: "default",
+          screen:
+            data.screen ||
+            "notifications",
         },
-      },
-    }));
-
-    const batches = [];
-    for (let i = 0; i < messages.length; i += 500) {
-      batches.push(messages.slice(i, i + 500));
-    }
-
-    let successCount = 0;
-    let failureCount = 0;
-    const failedTokens = [];
-
-    for (const batch of batches) {
-      const response = await admin.messaging().sendEach(batch);
-
-      response.responses.forEach((result, index) => {
-        if (result.success) {
-          successCount += 1;
-        } else {
-          failureCount += 1;
-          failedTokens.push({
-            token: batch[index].token,
-            error: result.error?.code || result.error?.message,
-          });
-        }
       });
-    }
 
-    await Notification.insertMany(
-      tokens.map((item) => ({
-        userId: item.userId,
-        title,
-        body,
-        type,
-        data,
-        deliveryStatus: "sent",
-        read: false,
-        sentAt: new Date(),
-      }))
+    const deliveryMap =
+      buildUserDeliveryMap(
+        pushResult.results,
+      );
+
+    await updateInboxDeliveryStatuses(
+      inboxDocuments,
+      deliveryMap,
     );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message: "Notification sent to all users",
-      totalTokens: tokens.length,
-      successCount,
-      failureCount,
-      failedTokens,
+      message:
+        "Notification sent to all users",
+
+      totalUsers:
+        uniqueUserIds.length,
+
+      totalDevices:
+        pushResult.uniqueDevices.length,
+
+      successCount:
+        pushResult.successCount,
+
+      failureCount:
+        pushResult.failureCount,
+
+      invalidTokensDisabled:
+        pushResult
+          .invalidTokensDisabled,
     });
   } catch (error) {
-    console.error("sendToAllUsers error:", error);
+    console.error(
+      "sendToAllUsers error:",
+      error,
+    );
+
+    if (inboxDocuments.length > 0) {
+      await Notification.updateMany(
+        {
+          _id: {
+            $in: inboxDocuments.map(
+              (document) =>
+                document._id,
+            ),
+          },
+        },
+        {
+          $set: {
+            deliveryStatus: "failed",
+            sentAt: new Date(),
+            failureReason:
+              error.message,
+          },
+        },
+      ).catch(() => {});
+    }
+
     return res.status(500).json({
       success: false,
       message: error.message,

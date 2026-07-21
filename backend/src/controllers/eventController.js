@@ -4,7 +4,17 @@ import NotificationToken from "../models/NotificationToken.js";
 import Notification from "../models/Notification.js";
 import { admin } from "../config/firebaseAdmin.js";
 
-export const createEvent = async (req, res) => {
+import {
+  buildUserDeliveryMap,
+  dedupeDeviceRecords,
+  sendPushToDeviceRecords,
+  uniqueUserIdsFromDevices,
+} from "../services/pushNotificationService.js";
+
+export const createEvent = async (
+  req,
+  res,
+) => {
   try {
     const {
       title,
@@ -16,7 +26,6 @@ export const createEvent = async (req, res) => {
       seats: rawSeats,
     } = req.body;
 
-    // ---------------- VALIDATION  ----------------
     if (
       !title ||
       !description ||
@@ -27,12 +36,12 @@ export const createEvent = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message:
+          "All fields are required",
       });
     }
 
-    // ---------------- SEATS NORMALIZATION ----------------
-    let seats = null; // null = unlimited
+    let seats = null;
 
     if (
       rawSeats !== "" &&
@@ -41,90 +50,252 @@ export const createEvent = async (req, res) => {
     ) {
       seats = Number(rawSeats);
 
-      if (isNaN(seats) || seats < 0) {
+      if (
+        Number.isNaN(seats) ||
+        seats < 0
+      ) {
         seats = 0;
       }
     }
 
-    // ---------------- CREATE EVENT FIRST ----------------
     const event = await Event.create({
-      title,
-      description,
+      title: String(title).trim(),
+      description:
+        String(description).trim(),
       date,
-      location,
-      organizer,
+      location:
+        String(location).trim(),
+      organizer:
+        String(organizer).trim(),
       image,
       seats,
     });
 
-    // ---------------- NOTIFICATIONS ----------------
-    const tokens = await NotificationToken.find({ isActive: true }).lean();
+    const rawDevices =
+      await NotificationToken.find({
+        isActive: true,
+      }).lean();
 
-    let successCount = 0;
-    let failureCount = 0;
+    const devices =
+      dedupeDeviceRecords(rawDevices);
 
-    if (tokens.length > 0) {
-      const messages = tokens.map((item) => ({
-        token: item.token,
-        notification: {
-          title: "New Event",
-          body: `${event.title} is now available. Register now.`,
-        },
-        data: {
-          type: "event",
-          screen: "events",
-          eventId: String(event._id),
-        },
-        android: {
-          priority: "high",
-          notification: {
-            channelId: "default",
-            sound: "default",
-          },
-        },
-      }));
-
-      for (let i = 0; i < messages.length; i += 500) {
-        const batch = messages.slice(i, i + 500);
-        const response = await admin.messaging().sendEach(batch);
-
-        successCount += response.successCount || 0;
-        failureCount += response.failureCount || 0;
-      }
-
-      await Notification.insertMany(
-        tokens.map((item) => ({
-          userId: item.userId,
-          title: "New Event",
-          body: `${event.title} is now available. Register now.`,
-          type: "event",
-          data: {
-            screen: "events",
-            eventId: String(event._id),
-          },
-          deliveryStatus: "sent",
-          read: false,
-          sentAt: new Date(),
-        }))
+    const uniqueUserIds =
+      uniqueUserIdsFromDevices(
+        devices,
       );
+
+    let inboxDocuments = [];
+
+    let notificationResult = {
+      totalUsers:
+        uniqueUserIds.length,
+
+      totalDevices:
+        devices.length,
+
+      successCount: 0,
+      failureCount: 0,
+      invalidTokensDisabled: 0,
+    };
+
+    if (devices.length > 0) {
+      const notificationTitle =
+        "New Event";
+
+      const notificationBody =
+        `${event.title} is now available. Register now.`;
+
+      /*
+       * Create one Alerts record per user before
+       * sending the Firebase push.
+       */
+      inboxDocuments =
+        await Notification.insertMany(
+          uniqueUserIds.map(
+            (userId) => ({
+              userId,
+
+              title:
+                notificationTitle,
+
+              body:
+                notificationBody,
+
+              type: "event",
+
+              data: {
+                screen: "events",
+                eventId:
+                  String(event._id),
+              },
+
+              deliveryStatus:
+                "queued",
+
+              read: false,
+            }),
+          ),
+        );
+
+      try {
+        const pushResult =
+          await sendPushToDeviceRecords({
+            deviceRecords: devices,
+
+            title:
+              notificationTitle,
+
+            body:
+              notificationBody,
+
+            data: {
+              type: "event",
+              screen: "events",
+              eventId:
+                String(event._id),
+            },
+          });
+
+        notificationResult = {
+          totalUsers:
+            uniqueUserIds.length,
+
+          totalDevices:
+            pushResult
+              .uniqueDevices.length,
+
+          successCount:
+            pushResult.successCount,
+
+          failureCount:
+            pushResult.failureCount,
+
+          invalidTokensDisabled:
+            pushResult
+              .invalidTokensDisabled,
+        };
+
+        const deliveryMap =
+          buildUserDeliveryMap(
+            pushResult.results,
+          );
+
+        const operations =
+          inboxDocuments.map(
+            (document) => {
+              const userDelivery =
+                deliveryMap.get(
+                  String(
+                    document.userId,
+                  ),
+                );
+
+              const delivered =
+                (
+                  userDelivery
+                    ?.successCount || 0
+                ) > 0;
+
+              return {
+                updateOne: {
+                  filter: {
+                    _id:
+                      document._id,
+                  },
+
+                  update: {
+                    $set: {
+                      deliveryStatus:
+                        delivered
+                          ? "sent"
+                          : "failed",
+
+                      sentAt:
+                        new Date(),
+
+                      failureReason:
+                        delivered
+                          ? ""
+                          : (
+                              userDelivery
+                                ?.errors ||
+                              []
+                            ).join(
+                              ", ",
+                            ) ||
+                            "Push delivery failed",
+                    },
+                  },
+                },
+              };
+            },
+          );
+
+        await Notification.bulkWrite(
+          operations,
+        );
+      } catch (pushError) {
+        console.error(
+          "Event push delivery error:",
+          pushError,
+        );
+
+        await Notification.updateMany(
+          {
+            _id: {
+              $in:
+                inboxDocuments.map(
+                  (document) =>
+                    document._id,
+                ),
+            },
+          },
+          {
+            $set: {
+              deliveryStatus:
+                "failed",
+
+              sentAt: new Date(),
+
+              failureReason:
+                pushError.message,
+            },
+          },
+        );
+
+        notificationResult = {
+          ...notificationResult,
+          failureCount:
+            devices.length,
+          error:
+            pushError.message,
+        };
+      }
     }
 
     return res.status(201).json({
       success: true,
-      message: "Event created and notification sent",
+
+      message:
+        notificationResult.error
+          ? "Event created, but push delivery had errors"
+          : "Event created and notification processed",
+
       event,
-      notification: {
-        totalTokens: tokens.length,
-        successCount,
-        failureCount,
-      },
+
+      notification:
+        notificationResult,
     });
   } catch (error) {
-    console.error("createEvent error:", error);
+    console.error(
+      "createEvent error:",
+      error,
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Server error while creating event",
+      message:
+        "Server error while creating event",
       error: error.message,
     });
   }
