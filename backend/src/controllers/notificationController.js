@@ -66,10 +66,7 @@ async function updateInboxDeliveryStatuses(
   );
 }
 
-export async function registerDeviceToken(
-  req,
-  res,
-) {
+export async function registerDeviceToken(req, res) {
   try {
     const {
       userId,
@@ -79,14 +76,21 @@ export async function registerDeviceToken(
       deviceName,
     } = req.body;
 
-    const cleanInstallationId =
-      String(
-        installationId || "",
-      ).trim();
+    const cleanInstallationId = String(
+      installationId || "",
+    ).trim();
 
     const cleanToken = String(
       token || "",
     ).trim();
+
+    const cleanPlatform = [
+      "android",
+      "ios",
+      "unknown",
+    ].includes(platform)
+      ? platform
+      : "unknown";
 
     if (
       !userId ||
@@ -112,69 +116,130 @@ export async function registerDeviceToken(
     }
 
     /*
-     * Remove any legacy row that owns the same
-     * Firebase token under another installation.
+     * A token and an installation each identify
+     * one device-registration row.
      */
-    await NotificationToken.deleteMany({
-      token: cleanToken,
+    const [tokenRecord, installationRecord] =
+      await Promise.all([
+        NotificationToken.findOne({
+          token: cleanToken,
+        }),
 
-      installationId: {
-        $ne: cleanInstallationId,
-      },
-    });
+        NotificationToken.findOne({
+          installationId:
+            cleanInstallationId,
+        }),
+      ]);
 
-    /*
-     * Upsert by installationId.
-     *
-     * Same phone + refreshed token:
-     * updates this record.
-     *
-     * Second phone:
-     * creates a second record.
-     *
-     * Same phone + different account:
-     * reassigns this installation to that account.
-     */
-    const saved =
-      await NotificationToken
-        .findOneAndUpdate(
+    let record;
+
+    if (
+      tokenRecord &&
+      installationRecord &&
+      String(tokenRecord._id) !==
+        String(installationRecord._id)
+    ) {
+      /*
+       * Same installation has an old token row,
+       * while the current token belongs to another
+       * legacy/racing row.
+       *
+       * Keep the current-token row and remove the
+       * stale installation row.
+       */
+      await NotificationToken.deleteOne({
+        _id: installationRecord._id,
+      });
+
+      record = tokenRecord;
+    } else {
+      record =
+        tokenRecord ||
+        installationRecord ||
+        new NotificationToken();
+    }
+
+    record.userId = userId;
+    record.installationId =
+      cleanInstallationId;
+    record.token = cleanToken;
+    record.platform = cleanPlatform;
+    record.deviceName =
+      String(deviceName || "").trim();
+    record.isActive = true;
+    record.lastSeenAt = new Date();
+    record.lastFailedAt = null;
+    record.failureReason = "";
+
+    try {
+      await record.save();
+    } catch (error) {
+      /*
+       * A second simultaneous request may have
+       * completed first. Read the canonical row
+       * and update it instead of returning 500.
+       */
+      if (error?.code !== 11000) {
+        throw error;
+      }
+
+      const canonicalRecord =
+        await NotificationToken.findOne({
+          $or: [
+            {
+              token: cleanToken,
+            },
+            {
+              installationId:
+                cleanInstallationId,
+            },
+          ],
+        });
+
+      if (!canonicalRecord) {
+        throw error;
+      }
+
+      await NotificationToken.deleteMany({
+        _id: {
+          $ne: canonicalRecord._id,
+        },
+
+        $or: [
+          {
+            token: cleanToken,
+          },
           {
             installationId:
               cleanInstallationId,
           },
-          {
-            $set: {
-              userId,
-              installationId:
-                cleanInstallationId,
+        ],
+      });
 
-              token: cleanToken,
+      canonicalRecord.userId = userId;
+      canonicalRecord.installationId =
+        cleanInstallationId;
+      canonicalRecord.token = cleanToken;
+      canonicalRecord.platform =
+        cleanPlatform;
+      canonicalRecord.deviceName =
+        String(deviceName || "").trim();
+      canonicalRecord.isActive = true;
+      canonicalRecord.lastSeenAt =
+        new Date();
+      canonicalRecord.lastFailedAt = null;
+      canonicalRecord.failureReason = "";
 
-              platform:
-                platform || "unknown",
+      await canonicalRecord.save();
 
-              deviceName:
-                deviceName || "",
-
-              isActive: true,
-              lastSeenAt: new Date(),
-
-              failureReason: "",
-              lastFailedAt: null,
-            },
-          },
-          {
-            new: true,
-            upsert: true,
-            runValidators: true,
-          },
-        );
+      record = canonicalRecord;
+    }
 
     return res.status(200).json({
       success: true,
       message:
         "Notification device registered",
-      device: saved,
+      device: record,
     });
   } catch (error) {
     console.error(
@@ -184,7 +249,9 @@ export async function registerDeviceToken(
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message:
+        error?.message ||
+        "Unable to register notification device",
     });
   }
 }
