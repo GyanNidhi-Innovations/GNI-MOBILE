@@ -11,6 +11,38 @@ import {
   uniqueUserIdsFromDevices,
 } from "../services/pushNotificationService.js";
 
+
+function normalizeNotificationImageUrl(
+  value,
+) {
+  const imageUrl =
+    String(value || "").trim();
+
+  if (!imageUrl) {
+    return "";
+  }
+
+  try {
+    const parsedUrl =
+      new URL(imageUrl);
+
+    if (
+      parsedUrl.protocol !== "https:" &&
+      parsedUrl.protocol !== "http:"
+    ) {
+      return "";
+    }
+
+    /*
+     * URL.toString() converts spaces in the
+     * pathname to %20.
+     */
+    return parsedUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
 export const createEvent = async (
   req,
   res,
@@ -70,6 +102,24 @@ export const createEvent = async (
       image,
       seats,
     });
+
+    const notificationImageUrl =
+  normalizeNotificationImageUrl(
+    event.image,
+  );
+
+console.log(
+  "[PUSH-DEBUG][EVENT] normalized image URL",
+  {
+    originalImageUrl:
+      event.image,
+
+    notificationImageUrl,
+
+    validForFirebase:
+      Boolean(notificationImageUrl),
+  },
+);
 
     console.log(
   "[PUSH-DEBUG][EVENT] event created",
@@ -202,10 +252,12 @@ console.log(
 
               data: {
                 screen: "events",
+                            
                 eventId:
                   String(event._id),
-                  imageUrl:
-                    event.image,
+                            
+                imageUrl:
+                  notificationImageUrl,
               },
 
               deliveryStatus:
@@ -218,37 +270,45 @@ console.log(
 
       try {
         const pushResult =
-          await sendPushToDeviceRecords({
-            deviceRecords: devices,
+  await sendPushToDeviceRecords({
+    deviceRecords: devices,
 
-            title:
-              notificationTitle,
+    title:
+      notificationTitle,
 
-            body:
-              notificationBody,
+    body:
+      notificationBody,
 
-            imageUrl:
-              event.image,
+    /*
+     * Send a rich notification image only when
+     * the normalized URL is valid.
+     */
+    imageUrl:
+      notificationImageUrl ||
+      undefined,
 
-            data: {
-              type: "event",
-              screen: "events",
-              eventId:
-                String(event._id),
-               
-              imageUrl:
-                event.image,
-            },
-          });
+    data: {
+      type: "event",
+      screen: "events",
 
-         console.log(
+      eventId:
+        String(event._id),
+
+      imageUrl:
+        notificationImageUrl,
+    },
+  });
+
+ console.log(
   "[PUSH-DEBUG][EVENT] Firebase result",
   {
     eventId:
       String(event._id),
 
-    imageUrl:
+    originalImageUrl:
       event.image,
+
+    notificationImageUrl,
 
     totalUniqueDevices:
       pushResult.uniqueDevices.length,
