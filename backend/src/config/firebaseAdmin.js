@@ -17,6 +17,17 @@ export function initFirebaseAdmin() {
     );
   }
 
+  console.log(
+  "[PUSH-DEBUG][FIREBASE] Admin configuration",
+  {
+    projectId,
+
+    clientEmailDomain:
+      String(clientEmail || "")
+        .split("@")[1] || null,
+  },
+);
+
   firebaseApp = admin.initializeApp({
     credential: admin.credential.cert({
       projectId,
