@@ -76,6 +76,26 @@ export async function registerDeviceToken(req, res) {
       deviceName,
     } = req.body;
 
+   
+    console.log(
+  "[PUSH-DEBUG][BACKEND] register-token received",
+  {
+    database:
+      mongoose.connection.name,
+    collection:
+      NotificationToken.collection.name,
+    userId,
+    installationId,
+    platform,
+    deviceName,
+    tokenLength:
+      String(token || "").length,
+    tokenLast10:
+      String(token || "").slice(-10),
+  },
+);
+
+
     const cleanInstallationId = String(
       installationId || "",
     ).trim();
@@ -130,6 +150,58 @@ export async function registerDeviceToken(req, res) {
             cleanInstallationId,
         }),
       ]);
+
+      console.log(
+  "[PUSH-DEBUG][BACKEND] registration lookup result",
+  {
+    tokenRecordFound:
+      Boolean(tokenRecord),
+
+    tokenRecordId:
+      tokenRecord?._id
+        ? String(tokenRecord._id)
+        : null,
+
+    tokenRecordUserId:
+      tokenRecord?.userId
+        ? String(tokenRecord.userId)
+        : null,
+
+    tokenRecordIsActive:
+      tokenRecord?.isActive ?? null,
+
+    tokenRecordInstallationId:
+      tokenRecord?.installationId ||
+      null,
+
+    installationRecordFound:
+      Boolean(installationRecord),
+
+    installationRecordId:
+      installationRecord?._id
+        ? String(
+            installationRecord._id,
+          )
+        : null,
+
+    installationRecordUserId:
+      installationRecord?.userId
+        ? String(
+            installationRecord.userId,
+          )
+        : null,
+
+    installationRecordIsActive:
+      installationRecord?.isActive ??
+      null,
+
+    installationRecordTokenLast10:
+      String(
+        installationRecord?.token ||
+          "",
+      ).slice(-10),
+  },
+);
 
     let record;
 
@@ -235,6 +307,49 @@ export async function registerDeviceToken(req, res) {
       record = canonicalRecord;
     }
 
+    console.log(
+  "[PUSH-DEBUG][BACKEND] device registration saved",
+  {
+    database:
+      mongoose.connection.name,
+
+    collection:
+      NotificationToken.collection.name,
+
+    documentId:
+      String(record._id),
+
+    userId:
+      String(record.userId),
+
+    installationId:
+      record.installationId,
+
+    platform:
+      record.platform,
+
+    isActive:
+      record.isActive,
+
+    tokenLength:
+      String(record.token || "")
+        .length,
+
+    tokenLast10:
+      String(record.token || "")
+        .slice(-10),
+
+    lastSeenAt:
+      record.lastSeenAt,
+
+    lastFailedAt:
+      record.lastFailedAt,
+
+    failureReason:
+      record.failureReason,
+  },
+);
+
     return res.status(200).json({
       success: true,
       message:
@@ -274,19 +389,47 @@ export async function deactivateDeviceToken(
       });
     }
 
-    await NotificationToken.updateOne(
-      {
-        userId,
-        installationId,
-      },
-      {
-        $set: {
-          isActive: false,
-          lastSeenAt: new Date(),
-        },
-      },
-    );
+    console.log(
+  "[PUSH-DEBUG][BACKEND] deactivate-token received",
+  {
+    database:
+      mongoose.connection.name,
 
+    collection:
+      NotificationToken.collection.name,
+
+    userId,
+    installationId,
+  },
+);
+
+const deactivateResult =
+  await NotificationToken.updateOne(
+    {
+      userId,
+      installationId,
+    },
+    {
+      $set: {
+        isActive: false,
+        lastSeenAt: new Date(),
+      },
+    },
+  );
+
+console.log(
+  "[PUSH-DEBUG][BACKEND] deactivate-token completed",
+  {
+    userId,
+    installationId,
+
+    matchedCount:
+      deactivateResult.matchedCount,
+
+    modifiedCount:
+      deactivateResult.modifiedCount,
+  },
+);
     /*
      * Return success even if it was already
      * inactive. Logout should be idempotent.
@@ -464,6 +607,64 @@ export async function sendToUser(
 
     const devices =
       dedupeDeviceRecords(rawDevices);
+
+    const totalUserDeviceRecords =
+  await NotificationToken
+    .countDocuments({
+      userId,
+    });
+
+const inactiveUserDeviceRecords =
+  await NotificationToken
+    .countDocuments({
+      userId,
+      isActive: false,
+    });
+
+console.log(
+  "[PUSH-DEBUG][BACKEND] send-user device state",
+  {
+    database:
+      mongoose.connection.name,
+
+    collection:
+      NotificationToken.collection.name,
+
+    userId,
+
+    totalDeviceRecords:
+      totalUserDeviceRecords,
+
+    activeDeviceRecords:
+      rawDevices.length,
+
+    deduplicatedDevices:
+      devices.length,
+
+    inactiveDeviceRecords:
+      inactiveUserDeviceRecords,
+
+    activeDevices:
+      devices.map(
+        (device) => ({
+          documentId:
+            String(device._id),
+
+          installationId:
+            device.installationId,
+
+          tokenLast10:
+            String(
+              device.token || "",
+            ).slice(-10),
+
+          isActive:
+            device.isActive,
+        }),
+      ),
+  },
+);
+
 
     /*
      * Store the Alerts record before Firebase
@@ -739,6 +940,31 @@ export async function sendToAllUsers(
         isActive: true,
       }).lean();
 
+
+      const totalDeviceRecords =
+  await NotificationToken.countDocuments(
+    {},
+  );
+
+const inactiveDeviceRecords =
+  await NotificationToken.countDocuments({
+    isActive: false,
+  });
+
+console.log(
+  "[PUSH-DEBUG][BACKEND] send-all device state",
+  {
+    database:
+      mongoose.connection.name,
+    collection:
+      NotificationToken.collection.name,
+    totalDeviceRecords,
+    activeDeviceRecords:
+      rawDevices.length,
+    inactiveDeviceRecords,
+  },
+);
+
     const devices =
       dedupeDeviceRecords(rawDevices);
 
@@ -794,6 +1020,49 @@ export async function sendToAllUsers(
             "notifications",
         },
       });
+
+      console.log(
+  "[PUSH-DEBUG][BACKEND] send-all Firebase result",
+  {
+    totalUniqueDevices:
+      pushResult.uniqueDevices.length,
+
+    successCount:
+      pushResult.successCount,
+
+    failureCount:
+      pushResult.failureCount,
+
+    invalidTokensDisabled:
+      pushResult
+        .invalidTokensDisabled,
+
+    deviceResults:
+      pushResult.results.map(
+        (result) => ({
+          userId:
+            result.userId,
+
+          installationId:
+            result.installationId,
+
+          tokenLast10:
+            String(
+              result.token || "",
+            ).slice(-10),
+
+          success:
+            result.success,
+
+          errorCode:
+            result.errorCode,
+
+          errorMessage:
+            result.errorMessage,
+        }),
+      ),
+  },
+);
 
     const deliveryMap =
       buildUserDeliveryMap(
