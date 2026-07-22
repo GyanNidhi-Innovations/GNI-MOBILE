@@ -71,6 +71,21 @@ export const createEvent = async (
       seats,
     });
 
+    console.log(
+  "[PUSH-DEBUG][EVENT] event created",
+  {
+    eventId: String(event._id),
+    title: event.title,
+    imageUrl: event.image,
+    imageUrlLength:
+      String(event.image || "").length,
+    imageUsesHttps:
+      /^https:\/\//i.test(
+        String(event.image || ""),
+      ),
+  },
+);
+
     const rawDevices =
       await NotificationToken.find({
         isActive: true,
@@ -83,6 +98,54 @@ export const createEvent = async (
       uniqueUserIdsFromDevices(
         devices,
       );
+
+      const totalDeviceRecords =
+  await NotificationToken.countDocuments(
+    {},
+  );
+
+const inactiveDeviceRecords =
+  await NotificationToken.countDocuments({
+    isActive: false,
+  });
+
+console.log(
+  "[PUSH-DEBUG][EVENT] device state",
+  {
+    database:
+      mongoose.connection.name,
+
+    collection:
+      NotificationToken.collection.name,
+
+    eventId:
+      String(event._id),
+
+    totalDeviceRecords,
+
+    rawActiveDeviceRecords:
+      rawDevices.length,
+
+    deduplicatedActiveDevices:
+      devices.length,
+
+    inactiveDeviceRecords,
+
+    activeDevices:
+      devices.map((device) => ({
+        userId:
+          String(device.userId || ""),
+
+        installationId:
+          device.installationId,
+
+        tokenLast10:
+          String(
+            device.token || "",
+          ).slice(-10),
+      })),
+  },
+);
 
     let inboxDocuments = [];
 
@@ -97,6 +160,20 @@ export const createEvent = async (
       failureCount: 0,
       invalidTokensDisabled: 0,
     };
+
+    if (devices.length === 0) {
+  console.warn(
+    "[PUSH-DEBUG][EVENT] push skipped because no active devices exist",
+    {
+      eventId:
+        String(event._id),
+
+      totalDeviceRecords,
+
+      inactiveDeviceRecords,
+    },
+  );
+}
 
     if (devices.length > 0) {
       const notificationTitle =
@@ -163,6 +240,56 @@ export const createEvent = async (
                 event.image,
             },
           });
+
+         console.log(
+  "[PUSH-DEBUG][EVENT] Firebase result",
+  {
+    eventId:
+      String(event._id),
+
+    imageUrl:
+      event.image,
+
+    totalUniqueDevices:
+      pushResult.uniqueDevices.length,
+
+    successCount:
+      pushResult.successCount,
+
+    failureCount:
+      pushResult.failureCount,
+
+    invalidTokensDisabled:
+      pushResult
+        .invalidTokensDisabled,
+
+    deviceResults:
+      pushResult.results.map(
+        (result) => ({
+          userId:
+            result.userId,
+
+          installationId:
+            result.installationId,
+
+          tokenLast10:
+            String(
+              result.token || "",
+            ).slice(-10),
+
+          success:
+            result.success,
+
+          errorCode:
+            result.errorCode,
+
+          errorMessage:
+            result.errorMessage,
+        }),
+      ),
+  },
+);
+
 
         notificationResult = {
           totalUsers:
