@@ -1,44 +1,129 @@
 import mongoose from "mongoose";
 
-const EventSchema = new mongoose.Schema(
+const SpeakerSchema =
+  new mongoose.Schema(
+    {
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      description: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      image: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+    },
+    {
+      _id: false,
+    },
+  );
+
+  const SessionSchema =
+  new mongoose.Schema(
+    {
+      label: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      startAt: {
+        type: Date,
+        required: true,
+      },
+
+      zoomRegistrationUrl: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+    },
+    {
+      _id: false,
+    },
+  );
+
+
+const FormRegistrationSchema = new mongoose.Schema(
   {
-    title: {
+    email: {
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
     },
-
-    description: {
+    emailNormalized: {
       type: String,
-      default: "",
-    },
-
-    date: {
-      type: Date,
       required: true,
+      trim: true,
+      lowercase: true,
     },
-
-    location: {
+    fullName: { type: String, default: "", trim: true },
+    phone: { type: String, default: "", trim: true },
+    googleResponseId: { type: String, default: "", trim: true },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Registration",
+      default: null,
+    },
+    source: {
       type: String,
-      default: "",
+      enum: ["google_form", "admin", "mobile"],
+      default: "google_form",
     },
+    submittedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
 
-    organizer: {
-      type: String,
-      default: "",
-    },
+const EventSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, required: true, trim: true },
+    eventType: { type: String, default: "Event", trim: true },
 
-    image: {
-      type: String, // 🔥 needed for your frontend cards
-      default: "",
-    },
+    // Kept for compatibility with existing Home and Calendar code.
+    date: { type: Date, required: true, index: true },
 
-    seats: {
-  type: Number,
-  default: null,
-  min: 0
+    startAt: { type: Date, required: true, index: true },
+    endAt: { type: Date, required: true, index: true },
+    timezone: { type: String, default: "Asia/Kolkata", trim: true },
+
+    location: { type: String, default: "", trim: true },
+    organizer: { type: String, required: true, trim: true },
+
+    image: { type: String, required: true, trim: true },
+    registrationUrl: { type: String, required: true, trim: true },
+
+    speakers: { type: [SpeakerSchema], default: [] },
+    
+    sessions: {
+  type: [SessionSchema],
+  default: [],
 },
 
+
+    status: {
+      type: String,
+      enum: ["draft", "published", "closed", "cancelled", "completed"],
+      default: "published",
+      index: true,
+    },
+
+    registrations: {
+      type: [FormRegistrationSchema],
+      default: [],
+    },
+
+    // Preserved because current Home/Profile endpoints use this array.
     registeredUsers: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -46,9 +131,10 @@ const EventSchema = new mongoose.Schema(
       },
     ],
   },
-  {
-    timestamps: true, // 🔥 adds createdAt, updatedAt
-  }
+  { timestamps: true },
 );
 
-export default mongoose.model("Event", EventSchema);
+EventSchema.index({ status: 1, startAt: 1 });
+
+export default mongoose.models.Event ||
+  mongoose.model("Event", EventSchema);
