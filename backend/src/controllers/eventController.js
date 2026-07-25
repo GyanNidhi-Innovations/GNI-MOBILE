@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 
 import Event from "../models/Event.js";
-import Registration from "../models/Registration.js";
 import NotificationToken from "../models/NotificationToken.js";
 import Notification from "../models/Notification.js";
 
@@ -65,18 +64,8 @@ function parseBoolean(value) {
   ].includes(value);
 }
 
-function normalizeEmail(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
-}
 
-function escapeRegex(value) {
-  return String(value).replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&",
-  );
-}
+
 
 function normalizeSpeakers(value) {
   let speakers = value;
@@ -185,6 +174,62 @@ function normalizeSessions(value) {
     })
     .filter(Boolean);
 }
+
+function normalizeContentSections(
+  value,
+) {
+  let sections = value;
+
+  if (
+    typeof sections === "string"
+  ) {
+    try {
+      sections =
+        JSON.parse(sections);
+    } catch {
+      sections = [];
+    }
+  }
+
+  if (!Array.isArray(sections)) {
+    return [];
+  }
+
+  return sections
+    .slice(0, 30)
+    .map((section) => {
+      const title =
+        String(
+          section?.title || "",
+        ).trim();
+
+      const description =
+        String(
+          section?.description ||
+            "",
+        ).trim();
+
+      if (
+        !title ||
+        !description
+      ) {
+        return null;
+      }
+
+      return {
+        title:
+          title.slice(0, 200),
+
+        description:
+          description.slice(
+            0,
+            5000,
+          ),
+      };
+    })
+    .filter(Boolean);
+}
+
 
 async function sendEventPush(
   event,
@@ -513,6 +558,7 @@ export const createEvent =
         registrationUrl,
         speakers,
         sessions,
+        contentSections,
         status,
         sendNotification,
       } = req.body;
@@ -651,6 +697,11 @@ export const createEvent =
           registrationUrl:
             cleanRegistrationUrl,
 
+          contentSections:
+  normalizeContentSections(
+    contentSections,
+  ),
+
           speakers:
             normalizeSpeakers(
               speakers,
@@ -749,16 +800,10 @@ export const getEvents =
   async (req, res) => {
     try {
       const events =
-        await Event.find()
-          .populate(
-            "registeredUsers",
-
-            "name fullName email phone mobile studentEmail",
-          )
-          .sort({
-            startAt: 1,
-            date: 1,
-          });
+  await Event.find()
+    .sort({
+      createdAt: -1,
+    });
 
       return res.json({
         success: true,
@@ -848,420 +893,7 @@ export const getEventById =
     }
   };
 
-export const registerForEvent =
-  async (req, res) => {
-    return res
-      .status(410)
-      .json({
-        success: false,
 
-        message:
-          "Direct event registration is disabled. Complete the event Google Form.",
-      });
-  };
-
-export const googleFormRegistration =
-  async (req, res) => {
-    try {
-      const expectedSecret =
-        String(
-          process.env
-            .GOOGLE_FORM_WEBHOOK_SECRET ||
-            "",
-        );
-
-      const receivedSecret =
-        String(
-          req.get(
-            "x-gni-form-secret",
-          ) || "",
-        );
-
-      if (!expectedSecret) {
-        return res
-          .status(500)
-          .json({
-            success: false,
-
-            message:
-              "GOOGLE_FORM_WEBHOOK_SECRET is not configured",
-          });
-      }
-
-      if (
-        receivedSecret !==
-        expectedSecret
-      ) {
-        return res
-          .status(401)
-          .json({
-            success: false,
-
-            message:
-              "Invalid webhook secret",
-          });
-      }
-
-      const {
-        eventId,
-        email,
-        fullName,
-        phone,
-        googleResponseId,
-        submittedAt,
-      } = req.body;
-
-      if (
-        !mongoose.Types
-          .ObjectId.isValid(
-            eventId,
-          )
-      ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-
-            message:
-              "A valid eventId is required",
-          });
-      }
-
-      const emailNormalized =
-        normalizeEmail(
-          email,
-        );
-
-      if (
-        !emailNormalized
-      ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-
-            message:
-              "Verified respondent email is required",
-          });
-      }
-
-      const event =
-        await Event.findById(
-          eventId,
-        );
-
-      if (!event) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-
-            message:
-              "Event not found",
-          });
-      }
-
-      const user =
-        await Registration.findOne(
-          {
-            email: {
-              $regex:
-                `^${escapeRegex(
-                  emailNormalized,
-                )}$`,
-
-              $options: "i",
-            },
-          },
-        ).select(
-          "_id name fullName email phone",
-        );
-
-      const existing =
-        event.registrations.find(
-          (registration) =>
-            registration
-              .emailNormalized ===
-            emailNormalized,
-        );
-
-      if (!existing) {
-        event.registrations.push({
-          email:
-            emailNormalized,
-
-          emailNormalized,
-
-          fullName:
-            String(
-              fullName ||
-                user?.fullName ||
-                user?.name ||
-                "",
-            ).trim(),
-
-          phone:
-            String(
-              phone ||
-                user?.phone ||
-                "",
-            ).trim(),
-
-          googleResponseId:
-            String(
-              googleResponseId ||
-                "",
-            ).trim(),
-
-          userId:
-            user?._id || null,
-
-          source:
-            "google_form",
-
-          submittedAt:
-            parseDate(
-              submittedAt,
-            ) ||
-            new Date(),
-        });
-      } else {
-        existing.fullName =
-          String(
-            fullName ||
-              existing.fullName ||
-              user?.fullName ||
-              user?.name ||
-              "",
-          ).trim();
-
-        existing.phone =
-          String(
-            phone ||
-              existing.phone ||
-              user?.phone ||
-              "",
-          ).trim();
-
-        if (
-          googleResponseId
-        ) {
-          existing.googleResponseId =
-            String(
-              googleResponseId,
-            ).trim();
-        }
-
-        if (
-          user?._id &&
-          !existing.userId
-        ) {
-          existing.userId =
-            user._id;
-        }
-      }
-
-      if (user?._id) {
-        const linked =
-          event.registeredUsers.some(
-            (
-              registeredUserId,
-            ) =>
-              String(
-                registeredUserId,
-              ) ===
-              String(user._id),
-          );
-
-        if (!linked) {
-          event.registeredUsers.push(
-            user._id,
-          );
-        }
-      }
-
-      await event.save();
-
-      console.log(
-        "[EVENT-REGISTRATION] Google Form response recorded",
-        {
-          eventId:
-            String(event._id),
-
-          email:
-            emailNormalized,
-
-          userMatched:
-            Boolean(user?._id),
-
-          registrationCount:
-            event.registrations
-              .length,
-        },
-      );
-
-      return res.json({
-        success: true,
-
-        registered: true,
-
-        userMatched:
-          Boolean(user?._id),
-
-        message:
-          user?._id
-            ? "Registration recorded and linked to the GyanNidhi user"
-            : "Registration recorded, but the email did not match a GyanNidhi account",
-      });
-    } catch (error) {
-      console.error(
-        "googleFormRegistration error:",
-        error,
-      );
-
-      return res
-        .status(500)
-        .json({
-          success: false,
-
-          message:
-            "Server error while recording Google Form registration",
-
-          error:
-            error.message,
-        });
-    }
-  };
-
-export const getEventRegistrationStatus =
-  async (req, res) => {
-    try {
-      const {
-        id,
-        userId,
-      } = req.params;
-
-      if (
-        !mongoose.Types
-          .ObjectId.isValid(id) ||
-        !mongoose.Types
-          .ObjectId.isValid(
-            userId,
-          )
-      ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-
-            message:
-              "Valid event and user ids are required",
-          });
-      }
-
-      const [
-        event,
-        user,
-      ] = await Promise.all([
-        Event.findById(
-          id,
-        ).lean(),
-
-        Registration.findById(
-          userId,
-        )
-          .select(
-            "_id email",
-          )
-          .lean(),
-      ]);
-
-      if (!event) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-
-            message:
-              "Event not found",
-          });
-      }
-
-      if (!user) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-
-            message:
-              "User not found",
-          });
-      }
-
-      const emailNormalized =
-        normalizeEmail(
-          user.email,
-        );
-
-      const registeredByUserId =
-        (
-          event.registeredUsers ||
-          []
-        ).some(
-          (
-            registeredUserId,
-          ) =>
-            String(
-              registeredUserId,
-            ) ===
-            String(user._id),
-        );
-
-      const registration =
-        (
-          event.registrations ||
-          []
-        ).find(
-          (entry) =>
-            entry.emailNormalized ===
-              emailNormalized ||
-            String(
-              entry.userId || "",
-            ) ===
-              String(user._id),
-        );
-
-      return res.json({
-        success: true,
-
-        registered:
-          Boolean(
-            registeredByUserId ||
-              registration,
-          ),
-
-        registration:
-          registration || null,
-      });
-    } catch (error) {
-      console.error(
-        "getEventRegistrationStatus error:",
-        error,
-      );
-
-      return res
-        .status(500)
-        .json({
-          success: false,
-
-          message:
-            "Server error while checking registration status",
-
-          error:
-            error.message,
-        });
-    }
-  };
 
 export const getCalendarEvents =
   async (req, res) => {
@@ -1392,5 +1024,3 @@ export const getMyRegisteredEvents =
     }
   };
 
-export const getMyEvents =
-  getMyRegisteredEvents;

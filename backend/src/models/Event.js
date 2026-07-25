@@ -117,6 +117,26 @@ const FormRegistrationSchema =
     },
   );
 
+  const ContentSectionSchema =
+  new mongoose.Schema(
+    {
+      title: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      description: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+    },
+    {
+      _id: false,
+    },
+  );
+
 const EventSchema =
   new mongoose.Schema(
     {
@@ -188,6 +208,13 @@ const EventSchema =
         type: String,
         required: true,
         trim: true,
+      },
+
+      contentSections: {
+        type: [
+          ContentSectionSchema,
+        ],
+        default: [],
       },
 
       speakers: {
