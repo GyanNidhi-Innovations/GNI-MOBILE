@@ -15,7 +15,7 @@
         "applicationArchivePath": "android/app/build/outputs/apk/release/*.apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://demos.gyannidhi.in/gni-mobile-api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://demos.gyannidhi.in/gni-mobile-api/api"
       }
     },
     "preview": {
@@ -28,7 +28,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://demos.gyannidhi.in/gni-mobile-api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://demos.gyannidhi.in/gni-mobile-api/api"
       }
     },
     "production": {
@@ -37,7 +37,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://demos.gyannidhi.in/gni-mobile-api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://demos.gyannidhi.in/gni-mobile-api/api"
       }
     }
   },
