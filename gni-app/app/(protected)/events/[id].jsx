@@ -1,298 +1,1421 @@
 import {
-  View,
-  Text,
-  Pressable,
-  Image,
-  ScrollView,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
 } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useAuthStore } from "@/stores/authStore";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  router,
+  useLocalSearchParams,
+} from "expo-router";
+
+import { Ionicons } from "@expo/vector-icons";
+
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
+import * as WebBrowser from "expo-web-browser";
+
 import { getEventById } from "@/services/eventService";
-import { apiClient } from "@/services/apiClient";
+import { useResponsive } from "@/hooks/useResponsive";
+import { COLORS } from "@/theme";
+
+function toDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(
+    date.getTime(),
+  )
+    ? null
+    : date;
+}
+
+function formatDate(value) {
+  const date = toDate(value);
+
+  if (!date) {
+    return "Date to be announced";
+  }
+
+  return date.toLocaleDateString(
+    "en-IN",
+    {
+      weekday: "short",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    },
+  );
+}
+
+function formatTime(value) {
+  const date = toDate(value);
+
+  if (!date) {
+    return "Time to be announced";
+  }
+
+  return date.toLocaleTimeString(
+    "en-IN",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  );
+}
+
+function SectionTitle({
+  children,
+  type,
+}) {
+  return (
+    <Text
+      style={{
+        color: "#101828",
+
+        fontSize:
+          type.sectionTitle,
+
+        lineHeight:
+          type.sectionTitle + 7,
+
+        fontWeight: "800",
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function InformationRow({
+  icon,
+  label,
+  value,
+  type,
+  showDivider = true,
+}) {
+  return (
+    <View>
+      <View
+        style={
+          styles.informationRow
+        }
+      >
+        <View
+          style={
+            styles.informationIcon
+          }
+        >
+          <Ionicons
+            name={icon}
+            size={20}
+            color="#001B3D"
+          />
+        </View>
+
+        <View
+          style={{
+            flex: 1,
+            marginLeft: 12,
+          }}
+        >
+          <Text
+            style={{
+              color: "#667085",
+
+              fontSize:
+                type.small,
+
+              lineHeight:
+                type.small + 5,
+
+              fontWeight: "600",
+            }}
+          >
+            {label}
+          </Text>
+
+          <Text
+            style={{
+              marginTop: 4,
+
+              color: "#101828",
+
+              fontSize: type.body,
+
+              lineHeight:
+                type.body + 7,
+
+              fontWeight: "700",
+            }}
+          >
+            {value}
+          </Text>
+        </View>
+      </View>
+
+      {showDivider ? (
+        <View
+          style={
+            styles.informationDivider
+          }
+        />
+      ) : null}
+    </View>
+  );
+}
 
 export default function EventDetailsScreen() {
-  const { id, source } = useLocalSearchParams();
-  const user = useAuthStore((state) => state.user);
-  const insets = useSafeAreaInsets();
+  const { id } =
+    useLocalSearchParams();
 
-  const [event, setEvent] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [registering, setRegistering] = useState(false);
+  const insets =
+    useSafeAreaInsets();
 
-  const userId = user?.id || user?._id;
+  const {
+    width: screenWidth,
+    height: screenHeight,
+  } = useWindowDimensions();
 
-  const isRegistered =
-    event?.registeredUsers?.some((registeredUserId) => {
-      if (typeof registeredUserId === "object") {
-        return registeredUserId?._id?.toString() === userId?.toString();
+  const {
+    isCompactPhone,
+    type,
+    layout,
+  } = useResponsive();
+
+  const [event, setEvent] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [
+    imageFailed,
+    setImageFailed,
+  ] = useState(false);
+
+  const [
+    posterViewerVisible,
+    setPosterViewerVisible,
+  ] = useState(false);
+
+  const eventId =
+    Array.isArray(id)
+      ? id[0]
+      : id;
+
+  const heroHeight =
+    Math.min(
+      390,
+
+      Math.max(
+        270,
+
+        Math.round(
+          screenHeight * 0.39,
+        ),
+      ),
+    );
+
+  const horizontalPadding =
+    isCompactPhone ? 14 : 16;
+
+  const loadEvent =
+    useCallback(async () => {
+      if (!eventId) {
+        setEvent(null);
+        setLoading(false);
+        return;
       }
 
-      return registeredUserId?.toString() === userId?.toString();
-    }) || false;
-
-  const getValidEventDate = () => {
-  if (!event?.date) return null;
-
-  const eventDate = new Date(event.date);
-
-  if (isNaN(eventDate.getTime())) return null;
-
-  return eventDate;
-};
-
-const eventDate = getValidEventDate();
-
-const isPastEvent = eventDate ? eventDate < new Date() : false;
-
-const seats = Number(event?.seats);
-
-const registeredCount = Array.isArray(event?.registeredUsers)
-  ? event.registeredUsers.length
-  : 0;
-
-const isFull = Number.isFinite(seats) && seats > 0 && registeredCount >= seats;
-
-  useEffect(() => {
-    const fetchEvent = async () => {
       try {
         setLoading(true);
 
-        const res = await getEventById(id);
+        const response =
+          await getEventById(
+            eventId,
+          );
 
-        setEvent(res?.success ? res.event : null);
+        setEvent(
+          response?.event ||
+            response ||
+            null,
+        );
       } catch (error) {
-        console.log("fetchEvent error:", error);
-        Alert.alert("Error", "Failed to load event details");
+        console.log(
+          "getEventById error:",
+          error,
+        );
+
         setEvent(null);
       } finally {
         setLoading(false);
       }
-    };
+    }, [eventId]);
 
-    if (id) fetchEvent();
-  }, [id]);
+  useEffect(() => {
+    loadEvent();
+  }, [loadEvent]);
 
-  const handleRegister = async () => {
-    try {
-      if (!userId) {
-        Alert.alert("Error", "Please login first");
-        return;
-      }
+  const startAt =
+    useMemo(
+      () =>
+        toDate(
+          event?.startAt ||
+            event?.date,
+        ),
+      [event],
+    );
 
-      if (!id) {
-        Alert.alert("Error", "Invalid event id");
-        return;
-      }
+  const endAt =
+    useMemo(
+      () =>
+        toDate(
+          event?.endAt,
+        ),
+      [event],
+    );
 
-      if (isRegistered) {
-        Alert.alert("Info", "You are already registered for this event");
-        return;
-      }
-      if (isPastEvent) {
-  Alert.alert("Info", "Registration is closed for this event");
-  return;
-}
+  const isPast =
+    useMemo(() => {
+      const comparison =
+        endAt || startAt;
 
-      if (isFull) {
-        Alert.alert("Info", "No seats available for this event");
-        return;
-      }
+      return comparison
+        ? comparison <
+            new Date()
+        : false;
+    }, [
+      endAt,
+      startAt,
+    ]);
 
-      setRegistering(true);
+  const openExternalUrl =
+    useCallback(
+      async (value) => {
+        const url =
+          String(
+            value || "",
+          ).trim();
 
-      const res = await apiClient(`/events/${id}/register`, {
-        method: "POST",
-        body: JSON.stringify({ userId }),
-      });
+        if (!url) {
+          Alert.alert(
+            "Link unavailable",
+            "This link has not been added for this event.",
+          );
 
-      if (res?.success) {
-        setEvent((prev) => ({
-          ...prev,
-          registeredUsers: [...(prev?.registeredUsers || []), userId],
-        }));
+          return;
+        }
 
-        Alert.alert("Success", "You have registered for this event");
-      } else {
-        Alert.alert("Error", res?.message || "Registration failed");
-      }
-    } catch (error) {
-      console.log("handleRegister error:", error);
-      Alert.alert("Error", error?.message || "Registration failed");
-    } finally {
-      setRegistering(false);
-    }
-  };
+        try {
+          await WebBrowser.openBrowserAsync(
+            url,
+            {
+              toolbarColor:
+                "#001B3D",
 
-const getButtonText = () => {
-  if (isRegistered) return "Already Registered";
-  if (registering) return "Registering...";
-  if (isPastEvent) return "Registration Closed";
-  if (isFull) return "Seats Full";
-  return "Register Now";
-};
+              controlsColor:
+                "#FFFFFF",
 
-  const disabled = isRegistered || registering || isPastEvent || isFull;
+              showTitle: true,
+
+              enableBarCollapsing:
+                true,
+            },
+          );
+        } catch (error) {
+          console.log(
+            "Unable to open URL:",
+            error,
+          );
+
+          Alert.alert(
+            "Unable to open link",
+            "Please try again.",
+          );
+        }
+      },
+      [],
+    );
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB]">
-        <ActivityIndicator size="small" color="#0F5EFF" />
-
-        <Text className="mt-3 text-[14px] text-[#667085]">
-          Loading event...
-        </Text>
-      </View>
+      <SafeAreaView
+        edges={["top"]}
+        style={styles.safeArea}
+      >
+        <View
+          style={
+            styles.loadingContainer
+          }
+        >
+          <ActivityIndicator
+            size="small"
+            color={COLORS.primary}
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!event) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#F6F8FB] px-8">
-        <Text className="text-center text-[16px] text-[#667085]">
-          Event not found
-        </Text>
-
-        <Pressable
-          onPress={() => router.back()}
-          className="mt-5 rounded-2xl bg-[#0F5EFF] px-6 py-3"
+      <SafeAreaView
+        edges={["top"]}
+        style={styles.safeArea}
+      >
+        <View
+          style={
+            styles.notFoundContainer
+          }
         >
-          <Text className="font-semibold text-white">Go Back</Text>
-        </Pressable>
-      </View>
+          <Ionicons
+            name="alert-circle-outline"
+            size={48}
+            color="#667085"
+          />
+
+          <Text
+            style={{
+              marginTop: 16,
+
+              color: "#101828",
+
+              fontSize:
+                type.sectionTitle,
+
+              fontWeight: "800",
+            }}
+          >
+            Event not found
+          </Text>
+
+          <Pressable
+            onPress={() =>
+              router.back()
+            }
+            style={styles.goBackButton}
+          >
+            <Text
+              style={{
+                color: "#FFFFFF",
+
+                fontSize:
+                  type.button,
+
+                fontWeight: "800",
+              }}
+            >
+              Go back
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
     );
   }
 
+  const contentSections =
+    Array.isArray(
+      event?.contentSections,
+    )
+      ? event.contentSections
+      : [];
+
+  const speakers =
+    Array.isArray(
+      event?.speakers,
+    )
+      ? event.speakers
+      : [];
+
+  const sessions =
+    Array.isArray(
+      event?.sessions,
+    )
+      ? event.sessions
+      : [];
+
   return (
-    <View className="flex-1 bg-[#F6F8FB]">
+    <SafeAreaView
+      edges={["top"]}
+      style={styles.safeArea}
+    >
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={
+          false
+        }
         contentContainerStyle={{
-          paddingBottom: 190 + insets.bottom,
+          paddingBottom:
+            100 + insets.bottom,
         }}
       >
-        <View className="relative">
-          <Image
-            source={{
-              uri:
-                event.image && event.image.trim()
-                  ? event.image
-                  : "https://via.placeholder.com/800x500.png?text=Event",
-            }}
-            className="h-80 w-full"
-            resizeMode="cover"
-          />
+        <View
+          style={{
+            width: "100%",
 
-          <Pressable
-            onPress={() => router.back()}
-            style={{
-            position: "absolute",
-            left: 20,
-            top: insets.top + 16,
+            maxWidth:
+              layout.contentMaxWidth,
+
+            alignSelf: "center",
           }}
-          className="h-11 w-11 items-center justify-center rounded-full bg-white"
+        >
+          {/*
+            Simple navigation row.
+            No centred "Event details" text.
+          */}
+
+          <View
+            style={styles.topBar}
           >
-            <Ionicons name="chevron-back" size={22} color="#101828" />
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={() =>
+                router.back()
+              }
+              hitSlop={12}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
 
-        <View className="-mt-8 rounded-t-[32px] bg-[#F6F8FB] px-5 pt-8">
-          {source === "calendar" && (
-            <View className="mb-4 self-start rounded-full bg-[#EEF4FF] px-4 py-2">
-              <Text className="text-[12px] font-semibold text-[#0F5EFF]">
-                Opened from Calendar
-              </Text>
-            </View>
-          )}
+                alignItems: "center",
 
-          <Text className="text-[32px] font-bold leading-10 text-[#101828]">
-            {event.title || "Untitled Event"}
-          </Text>
+                justifyContent:
+                  "center",
 
-          <View className="mt-6 rounded-[28px] bg-white p-5">
-            <InfoRow
-              icon="calendar-outline"
-              label="Date & Time"
-              value={event.date ? new Date(event.date).toLocaleString() : "-"}
-            />
+                borderRadius: 14,
 
-            <Divider />
+                backgroundColor:
+                  "#F2F4F7",
 
-            <InfoRow
-              icon="location-outline"
-              label="Location"
-              value={event.location || "Online"}
-            />
+                opacity:
+                  pressed ? 0.72 : 1,
+              })}
+            >
+              <Ionicons
+                name="arrow-back"
+                size={25}
+                color="#101828"
+              />
+            </Pressable>
           </View>
 
-          <View className="mt-6 rounded-[28px] bg-white p-5">
-            <Text className="mb-3 text-[18px] font-bold text-[#101828]">
-              About this event
+          {/*
+            Full-width hero.
+            cover removes internal side gaps.
+            Full poster remains available
+            through the expand viewer.
+          */}
+
+         <Pressable
+  onPress={
+    event.image && !imageFailed
+      ? () => setPosterViewerVisible(true)
+      : undefined
+  }
+  style={{
+    width: "100%",
+    height: heroHeight,
+    overflow: "hidden",
+    backgroundColor: "#E9EDF3",
+  }}
+>
+  {event.image && !imageFailed ? (
+    <Image
+      source={{ uri: event.image }}
+      resizeMode="cover"
+      onError={(error) => {
+        console.log("Poster error:", error?.nativeEvent?.error);
+        setImageFailed(true);
+      }}
+      style={{ width: "100%", height: "100%" }}
+    />
+  ) : (
+    <View style={styles.imageFallback}>
+      <Ionicons name="image-outline" size={48} color="#98A2B3" />
+      <Text style={styles.imageFallbackText}>Poster unavailable</Text>
+    </View>
+  )}
+
+  {event.image && !imageFailed ? (
+    <View
+      pointerEvents="none"   // keep as is – it’s inside the Pressable, so it will still trigger
+      style={{
+        position: "absolute",
+        right: 14,
+        bottom: 14,
+        width: 44,
+        height: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 14,
+        backgroundColor: "rgba(0,0,0,0.72)",
+      }}
+    >
+      <Ionicons name="expand-outline" size={22} color="#FFFFFF" />
+    </View>
+  ) : null}
+</Pressable>
+
+          {/*
+            Flat content.
+            No large outer content card.
+          */}
+
+          <View
+            style={{
+              paddingHorizontal:
+                horizontalPadding,
+
+              paddingTop: 24,
+            }}
+          >
+            <Text
+              style={{
+                color: "#101828",
+
+                fontSize:
+                  type.heroTitle,
+
+                lineHeight:
+                  type.heroTitle + 8,
+
+                fontWeight: "800",
+              }}
+            >
+              {event.title}
             </Text>
 
-            <Text className="text-[15px] leading-7 text-[#667085]">
-              {event.description || "No description available"}
-            </Text>
+            <View
+              style={[
+                styles.informationCard,
+
+                {
+                  borderRadius:
+                    isCompactPhone
+                      ? 17
+                      : 20,
+                },
+              ]}
+            >
+              <InformationRow
+                icon="calendar-outline"
+                label="Starts"
+                value={`${formatDate(
+                  event.startAt ||
+                    event.date,
+                )} • ${formatTime(
+                  event.startAt ||
+                    event.date,
+                )}`}
+                type={type}
+              />
+
+              <InformationRow
+                icon="time-outline"
+                label="Ends"
+                value={`${formatDate(
+                  event.endAt,
+                )} • ${formatTime(
+                  event.endAt,
+                )}`}
+                type={type}
+              />
+
+              <InformationRow
+                icon="location-outline"
+                label="Location"
+                value={
+                  event.location ||
+                  "Location to be announced"
+                }
+                type={type}
+                showDivider={false}
+              />
+            </View>
+
+            <View
+              style={styles.section}
+            >
+              <SectionTitle
+                type={type}
+              >
+                About this event
+              </SectionTitle>
+
+              <Text
+                style={{
+                  marginTop: 11,
+
+                  color: "#475467",
+
+                  fontSize:
+                    type.body,
+
+                  lineHeight:
+                    type.body + 10,
+                }}
+              >
+                {event.description}
+              </Text>
+            </View>
+
+            {contentSections.map(
+              (
+                section,
+                index,
+              ) => {
+                const sectionTitle =
+                  String(
+                    section?.title ||
+                      "",
+                  ).trim();
+
+                const description =
+                  String(
+                    section?.description ||
+                      "",
+                  ).trim();
+
+                if (
+                  !sectionTitle ||
+                  !description
+                ) {
+                  return null;
+                }
+
+                return (
+                  <View
+                    key={`${sectionTitle}-${index}`}
+                    style={
+                      styles.dividedSection
+                    }
+                  >
+                    <SectionTitle
+                      type={type}
+                    >
+                      {sectionTitle}
+                    </SectionTitle>
+
+                    <Text
+                      style={{
+                        marginTop: 11,
+
+                        color:
+                          "#475467",
+
+                        fontSize:
+                          type.body,
+
+                        lineHeight:
+                          type.body +
+                          10,
+                      }}
+                    >
+                      {description}
+                    </Text>
+                  </View>
+                );
+              },
+            )}
+
+            {speakers.length >
+            0 ? (
+              <View
+                style={
+                  styles.dividedSection
+                }
+              >
+                <SectionTitle
+                  type={type}
+                >
+                  Speakers
+                </SectionTitle>
+
+                <View
+                  style={{
+                    marginTop: 15,
+                  }}
+                >
+                  {speakers.map(
+                    (
+                      speaker,
+                      index,
+                    ) => (
+                      <View
+                        key={`${speaker?.name}-${index}`}
+                        style={[
+                          styles.speakerCard,
+
+                          {
+                            marginBottom:
+                              index ===
+                              speakers.length -
+                                1
+                                ? 0
+                                : 12,
+
+                            borderRadius:
+                              isCompactPhone
+                                ? 16
+                                : 19,
+                          },
+                        ]}
+                      >
+                        {speaker?.image ? (
+                          <Image
+                            source={{
+                              uri:
+                                speaker.image,
+                            }}
+                            resizeMode="cover"
+                            style={
+                              styles.speakerImage
+                            }
+                          />
+                        ) : (
+                          <View
+                            style={
+                              styles.speakerFallback
+                            }
+                          >
+                            <Ionicons
+                              name="person-outline"
+                              size={28}
+                              color="#0F5EFF"
+                            />
+                          </View>
+                        )}
+
+                        <View
+                          style={{
+                            flex: 1,
+
+                            marginLeft: 13,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                "#101828",
+
+                              fontSize:
+                                type.cardTitle,
+
+                              lineHeight:
+                                type.cardTitle +
+                                6,
+
+                              fontWeight:
+                                "800",
+                            }}
+                          >
+                            {speaker?.name}
+                          </Text>
+
+                          {speaker?.description ? (
+                            <Text
+                              style={{
+                                marginTop: 6,
+
+                                color:
+                                  "#667085",
+
+                                fontSize:
+                                  type.small,
+
+                                lineHeight:
+                                  type.small +
+                                  7,
+                              }}
+                            >
+                              {
+                                speaker.description
+                              }
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ),
+                  )}
+                </View>
+              </View>
+            ) : null}
+
+            {/*
+              Registration is always rendered
+              before Zoom sessions.
+            */}
+
+            <View
+  style={{
+    width: "100%",
+    marginTop: 30,
+  }}
+>
+  <View
+    style={{
+      width: "100%",
+      height: 54,
+
+      overflow: "hidden",
+
+      borderRadius: 14,
+
+      backgroundColor:
+        isPast ||
+        !event.registrationUrl
+          ? "#98A2B3"
+          : "#022670",
+    }}
+  >
+    <Pressable
+      disabled={
+        isPast ||
+        !event.registrationUrl
+      }
+      onPress={() =>
+        openExternalUrl(
+          event.registrationUrl,
+        )
+      }
+      style={({ pressed }) => ({
+        width: "100%",
+        height: "100%",
+
+        alignItems: "center",
+        justifyContent: "center",
+
+        opacity:
+          pressed &&
+          !isPast &&
+          event.registrationUrl
+            ? 0.85
+            : 1,
+      })}
+    >
+      <Text
+        style={{
+          width: "100%",
+          height: 54,
+          lineHeight: 54,
+
+          color: "#FFFFFF",
+
+          fontSize: 16,
+          fontWeight: "700",
+
+          textAlign: "center",
+          textAlignVertical: "center",
+
+          includeFontPadding: false,
+        }}
+      >
+        {isPast
+          ? "Registration closed"
+          : !event.registrationUrl
+            ? "Registration unavailable"
+            : "Register now"}
+      </Text>
+    </Pressable>
+  </View>
+</View>
+
+            {sessions.length >
+            0 ? (
+              <View
+                style={
+                  styles.dividedSection
+                }
+              >
+                <SectionTitle
+                  type={type}
+                >
+                  Zoom sessions
+                </SectionTitle>
+
+                <View
+                  style={{
+                    marginTop: 15,
+                  }}
+                >
+                  {sessions.map(
+                    (
+                      session,
+                      index,
+                    ) => {
+                      const sessionUrl =
+                        String(
+                          session
+                            ?.zoomRegistrationUrl ||
+                            "",
+                        ).trim();
+
+                      return (
+                        <View
+                          key={`${session?.label}-${index}`}
+                          style={[
+                            styles.sessionCard,
+
+                            {
+                              marginBottom:
+                                index ===
+                                sessions.length -
+                                  1
+                                  ? 0
+                                  : 12,
+
+                              borderRadius:
+                                isCompactPhone
+                                  ? 16
+                                  : 19,
+                            },
+                          ]}
+                        >
+                          <View
+                            style={
+                              styles.sessionHeader
+                            }
+                          >
+                            <View
+                              style={
+                                styles.sessionIcon
+                              }
+                            >
+                              <Ionicons
+                                name="videocam-outline"
+                                size={21}
+                                color="#001B3D"
+                              />
+                            </View>
+
+                            <View
+                              style={{
+                                flex: 1,
+
+                                marginLeft:
+                                  12,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color:
+                                    "#101828",
+
+                                  fontSize:
+                                    type.cardTitle,
+
+                                  fontWeight:
+                                    "800",
+                                }}
+                              >
+                                {session?.label ||
+                                  `Day ${
+                                    index +
+                                    1
+                                  }`}
+                              </Text>
+
+                              <Text
+                                style={{
+                                  marginTop:
+                                    5,
+
+                                  color:
+                                    "#667085",
+
+                                  fontSize:
+                                    type.small,
+
+                                  lineHeight:
+                                    type.small +
+                                    6,
+                                }}
+                              >
+                                {formatDate(
+                                  session?.startAt,
+                                )}
+                              </Text>
+
+                              <Text
+                                style={{
+                                  marginTop:
+                                    2,
+
+                                  color:
+                                    "#667085",
+
+                                  fontSize:
+                                    type.small,
+                                }}
+                              >
+                                Starts at{" "}
+                                {formatTime(
+                                  session?.startAt,
+                                )}{" "}
+                                IST
+                              </Text>
+                              <Pressable
+  disabled={!sessionUrl}
+  onPress={() =>
+    openExternalUrl(
+      sessionUrl,
+    )
+  }
+  style={({ pressed }) => ({
+    alignSelf: "flex-start",
+
+    marginTop: 10,
+
+    opacity:
+      !sessionUrl
+        ? 0.4
+        : pressed
+          ? 0.65
+          : 1,
+  })}
+>
+  <Text
+    numberOfLines={1}
+    style={{
+      color: "#0F5EFF",
+
+      marginTop: 10,
+
+      fontSize: type.body,
+      fontWeight: "800",
+    }}
+  >
+    Register for Zoom →
+  </Text>
+</Pressable>
+
+                            </View>
+                          </View>
+
+                        </View>
+                      );
+                    },
+                  )}
+                </View>
+              </View>
+            ) : null}
+
+            <View
+              style={{
+                height: 20,
+              }}
+            />
           </View>
         </View>
       </ScrollView>
 
-      <View
-        style={{
-          position: "absolute",
-          left: 16,
-          right: 16,
-          bottom: 100 + insets.bottom,
-          backgroundColor: "white",
-          borderRadius: 28,
-          paddingHorizontal: 14,
-          paddingTop: 14,
-          paddingBottom: 14,
-          zIndex: 999,
-          elevation: 20,
-        }}
+      <Modal
+        visible={
+          posterViewerVisible
+        }
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() =>
+          setPosterViewerVisible(
+            false,
+          )
+        }
       >
-        <Pressable
-          disabled={disabled}
-          onPress={handleRegister}
-         className={`rounded-[22px] py-4 ${
-  disabled ? "bg-[#98A2B3]" : "bg-[#0F5EFF]"
-}`}
-        >
-          <Text className="text-center text-[16px] font-semibold text-white">
-            {getButtonText()}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
+        <View style={styles.viewerContainer}>
+  {/* Image first – then the button on top */}
+  {event.image ? (
+    <Image
+      source={{ uri: event.image }}
+      resizeMode="contain"
+      style={{
+        width: screenWidth,
+        height: screenHeight,
+      }}
+    />
+  ) : null}
+
+  {/* Close button – now after the image, so it's guaranteed on top */}
+  <Pressable
+    onPress={() => setPosterViewerVisible(false)}
+    hitSlop={12}
+    style={({ pressed }) => ({
+      position: "absolute",
+      top: insets.top + 14,
+      right: 16,
+      zIndex: 999,              // high enough
+      width: 46,
+      height: 46,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 23,          // fully round
+      backgroundColor: "rgba(0,0,0,0.6)", // dark semi-transparent – visible on any background
+      opacity: pressed ? 0.7 : 1,
+      // add a subtle shadow for better visibility
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 3,
+      elevation: 5,
+    })}
+  >
+    <Ionicons name="close" size={28} color="#FFFFFF" />  
+  </Pressable>
+</View>
+
+      </Modal>
+    </SafeAreaView>
   );
 }
 
-function InfoRow({ icon, label, value }) {
-  return (
-    <View className="flex-row items-center">
-      <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
-        <Ionicons name={icon} size={20} color="#0F5EFF" />
-      </View>
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
 
-      <View className="flex-1">
-        <Text className="text-[12px] font-medium text-[#98A2B3]">
-          {label}
-        </Text>
+    backgroundColor:
+      "#FFFFFF",
+  },
 
-        <Text className="mt-1 text-[15px] font-semibold text-[#101828]">
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-}
+  scrollView: {
+    flex: 1,
+  },
 
-function Divider() {
-  return <View className="my-5 h-px bg-[#EAECF0]" />;
-}
+  loadingContainer: {
+    flex: 1,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+  },
+
+  notFoundContainer: {
+    flex: 1,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+
+    paddingHorizontal: 24,
+  },
+
+  goBackButton: {
+    marginTop: 24,
+
+    minHeight: 50,
+
+    minWidth: 150,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+
+    borderRadius: 14,
+
+    backgroundColor:
+      "#001B3D",
+  },
+
+  topBar: {
+    height: 60,
+
+    justifyContent:
+      "center",
+
+    paddingHorizontal: 16,
+
+    backgroundColor:
+      "#FFFFFF",
+  },
+
+  imageFallback: {
+    flex: 1,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+  },
+
+  imageFallbackText: {
+    marginTop: 9,
+
+    color: "#667085",
+
+    fontSize: 13,
+
+    fontWeight: "600",
+  },
+
+  informationCard: {
+    marginTop: 20,
+
+    overflow: "hidden",
+
+    borderWidth: 1,
+
+    borderColor: "#E4E7EC",
+
+    backgroundColor:
+      "#FFFFFF",
+
+    paddingHorizontal: 14,
+  },
+
+  informationRow: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+
+    paddingVertical: 14,
+  },
+
+  informationIcon: {
+    width: 40,
+
+    height: 40,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+
+    borderRadius: 12,
+
+    backgroundColor:
+      "#EEF4FF",
+  },
+
+  informationDivider: {
+    height: 1,
+
+    marginLeft: 52,
+
+    backgroundColor:
+      "#EAECF0",
+  },
+
+  section: {
+    marginTop: 30,
+  },
+
+  dividedSection: {
+    marginTop: 28,
+
+    paddingTop: 25,
+
+    borderTopWidth: 1,
+
+    borderTopColor:
+      "#EAECF0",
+  },
+
+  speakerCard: {
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    borderWidth: 1,
+
+    borderColor: "#E4E7EC",
+
+    backgroundColor:
+      "#F9FAFB",
+
+    padding: 13,
+  },
+
+  speakerImage: {
+    width: 70,
+
+    height: 70,
+
+    borderRadius: 17,
+
+    backgroundColor:
+      "#E9EDF3",
+  },
+
+  speakerFallback: {
+    width: 70,
+
+    height: 70,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+
+    borderRadius: 17,
+
+    backgroundColor:
+      "#EEF4FF",
+  },
+
+  sessionCard: {
+    borderWidth: 1,
+
+    borderColor: "#E4E7EC",
+
+    backgroundColor:
+      "#F9FAFB",
+
+    padding: 15,
+  },
+
+  sessionHeader: {
+    flexDirection: "row",
+
+    alignItems: "center",
+  },
+
+  sessionIcon: {
+    width: 42,
+
+    height: 42,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+
+    borderRadius: 13,
+
+    backgroundColor:
+      "#EEF4FF",
+  },
+
+  viewerContainer: {
+    flex: 1,
+
+    alignItems: "center",
+
+    justifyContent:
+      "center",
+
+    backgroundColor:
+      "#FFFFFF",
+  },
+});

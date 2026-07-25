@@ -1,10 +1,13 @@
 export const TYPOGRAPHY = {
-  h1: 30,
-  h2: 24,
-  h3: 20,
+  pageTitle: 28,
+  sectionTitle: 20,
+  cardTitle: 18,
 
-  body: 16,
+  bodyLarge: 16,
+  body: 15,
   small: 14,
+  label: 13,
+  tiny: 12,
 
   button: 16,
 };

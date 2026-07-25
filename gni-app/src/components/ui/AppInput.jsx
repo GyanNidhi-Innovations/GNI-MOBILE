@@ -29,7 +29,7 @@ export default function AppInput({
           numberOfLines={1}
           style={{
             marginBottom: SPACING.sm,
-            fontSize: TYPOGRAPHY.tiny,
+            fontSize: TYPOGRAPHY.label,
             fontWeight: "600",
             color: COLORS.text,
           }}
@@ -81,7 +81,7 @@ export default function AppInput({
             minWidth: 0,
             marginLeft: icon ? SPACING.md : 0,
             paddingVertical: multiline ? SPACING.md : 0,
-            fontSize: 15,
+            fontSize: TYPOGRAPHY.body,
             color: COLORS.text,
             minHeight: multiline ? 96 : 54,
             textAlignVertical: multiline ? "top" : "center",
@@ -103,7 +103,7 @@ export default function AppInput({
             <Text
               numberOfLines={1}
               style={{
-                fontSize: TYPOGRAPHY.tiny,
+                fontSize: TYPOGRAPHY.label,
                 fontWeight: "600",
                 color: COLORS.primary,
               }}

@@ -1,12 +1,15 @@
 export const COLORS = {
-  primary: "#0F5EFF",
+  primary: "#022670",
   primaryDark: "#0A46C4",
 
-  background: "#F6F8FB",
+  background: "#FFFFFF",
   surface: "#FFFFFF",
+  inputBackground: "#F9FAFB",
 
   text: "#101828",
   textSecondary: "#667085",
+  textMuted: "#98A2B3",
+  icon: "#667085",
 
   border: "#D0D5DD",
 

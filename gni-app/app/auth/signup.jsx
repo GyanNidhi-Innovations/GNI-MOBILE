@@ -2,28 +2,62 @@ import { useMemo, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   Alert,
+  TextInput,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import * as DocumentPicker from "expo-document-picker";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { signupUserApi } from "../../src/services/authService";
 
+import {
+  signupUserApi,
+  loginUserApi,
+} from "../../src/services/authService";
+
+import { useAuthStore } from "../../src/stores/authStore";
 import AppScreen from "../../src/components/common/AppScreen";
-import AppButton from "../../src/components/ui/AppButton";
 import AppInput from "../../src/components/ui/AppInput";
+import { COLORS, SPACING, RADIUS } from "../../src/theme";
 
-const joiningYearOptions = Array.from({ length: 27 }, (_, i) =>
-  String(2000 + i),
-);
-const passOutYearOptions = Array.from({ length: 31 }, (_, i) =>
-  String(2000 + i),
+// Copy the website's existing colleges file to:
+// gni-app/src/data/colleges.js
+// It must export: export const colleges = [...];
+import { colleges } from "../../src/data/colleges";
+
+const ACCOUNT_TYPES = [
+  {
+    label: "Student",
+    value: "student-college",
+  },
+  {
+    label: "Job Seeker - Fresher",
+    value: "jobseeker-fresher",
+  },
+  {
+    label: "Working Professional",
+    value: "working-professional",
+  },
+];
+
+const YEAR_OF_STUDY_OPTIONS = [
+  "1st Year",
+  "2nd Year",
+  "3rd Year",
+  "4th Year",
+];
+
+const JOINING_YEAR_OPTIONS = Array.from({ length: 27 }, (_, index) =>
+  String(2000 + index),
 );
 
-const branchOptions = [
+const PASSOUT_YEAR_OPTIONS = Array.from({ length: 31 }, (_, index) =>
+  String(2000 + index),
+);
+
+const BRANCH_OPTIONS = [
   "CSE",
   "CSE-AIML",
   "CSE-AIDS",
@@ -36,7 +70,7 @@ const branchOptions = [
   "Others",
 ];
 
-const degreeOptions = [
+const DEGREE_OPTIONS = [
   "High School",
   "Diploma",
   "Bachelor's Degree",
@@ -44,770 +78,1117 @@ const degreeOptions = [
   "PhD",
 ];
 
-const experienceOptions = ["0-1", "2-3", "3-5", "5+"];
+const EXPERIENCE_OPTIONS = [
+  { label: "0-1 years (Fresher)", value: "0-1" },
+  { label: "2-3 years", value: "2-3" },
+  { label: "3-5 years", value: "3-5" },
+  { label: "5+ years", value: "5+" },
+];
+
+const INITIAL_FORM = {
+  type: "student-college",
+
+  name: "",
+  email: "",
+  phone: "",
+  password: "",
+  confirmPassword: "",
+
+  college: "",
+  year: "",
+  joiningyear: "",
+  branch: "",
+  customBranch: "",
+  skills: "",
+
+  degree: "",
+  passoutYear: "",
+
+  currentCompany: "",
+  currentRole: "",
+  experience: "",
+};
+
+function FieldError({ message }) {
+  if (!message) return null;
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-start",
+        marginTop: -10,
+        marginBottom: SPACING.lg,
+      }}
+    >
+      <Ionicons
+        name="alert-circle-outline"
+        size={16}
+        color="#D92D20"
+        style={{ marginTop: 1, marginRight: 6 }}
+      />
+      <Text
+        style={{
+          flex: 1,
+          color: "#D92D20",
+          fontSize: 12,
+          lineHeight: 18,
+        }}
+      >
+        {message}
+      </Text>
+    </View>
+  );
+}
+
+function SectionTitle({ title }) {
+  return (
+    <View
+      style={{
+        marginTop: SPACING.md,
+        marginBottom: SPACING.xl,
+        paddingBottom: SPACING.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: "#EAECF0",
+      }}
+    >
+      <Text
+        style={{
+          color: "#101828",
+          fontSize: 18,
+          lineHeight: 24,
+          fontWeight: "700",
+        }}
+      >
+        {title}
+      </Text>
+    </View>
+  );
+}
+
+
+
+
+
+function PickerField({
+  label,
+  value,
+  placeholder,
+  options,
+  onValueChange,
+  error,
+  mode = "dialog",
+}) {
+  return (
+    <View style={{ marginBottom: SPACING.xl }}>
+      <Text
+        style={{
+          marginBottom: SPACING.sm,
+          color: "#101828",
+          fontSize: 13,
+          fontWeight: "600",
+        }}
+      >
+        {label}
+      </Text>
+
+      <View
+        style={{
+          minHeight: 56,
+          justifyContent: "center",
+          borderRadius: RADIUS.xl,
+          borderWidth: 1,
+          borderColor: error ? "#D92D20" : "#D0D5DD",
+          backgroundColor: "#F9FAFB",
+          overflow: "hidden",
+        }}
+      >
+        <Picker
+          selectedValue={value}
+          onValueChange={onValueChange}
+          mode={mode}
+          dropdownIconColor="#667085"
+          style={{
+            height: 56,
+            color: value ? "#101828" : "#667085",
+          }}
+        >
+          <Picker.Item label={placeholder} value="" />
+          {options.map((option) => {
+            const item =
+              typeof option === "string"
+                ? { label: option, value: option }
+                : option;
+
+            return (
+              <Picker.Item
+                key={item.value}
+                label={item.label}
+                value={item.value}
+              />
+            );
+          })}
+        </Picker>
+      </View>
+
+      {error ? (
+        <Text
+          style={{
+            marginTop: SPACING.sm,
+            color: "#D92D20",
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function CollegeSearchField({ value, onChange, error }) {
+  const [open, setOpen] = useState(false);
+
+  const filteredColleges = useMemo(() => {
+    const query = value.trim().toLowerCase();
+    if (!query) return [];
+
+    return colleges
+      .filter((college) => college.toLowerCase().includes(query))
+      .slice(0, 20);
+  }, [value]);
+
+  const handleTextChange = (text) => {
+    // Same basic restriction as the website form.
+    const cleaned = text.replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ");
+    onChange(cleaned);
+    setOpen(true);
+  };
+
+  return (
+    <View style={{ marginBottom: SPACING.xl, zIndex: 20 }}>
+      <Text
+        style={{
+          marginBottom: SPACING.sm,
+          color: "#101828",
+          fontSize: 13,
+          fontWeight: "600",
+        }}
+      >
+        College Name *
+      </Text>
+
+      <View
+        style={{
+          minHeight: 56,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: SPACING.lg,
+          borderRadius: RADIUS.xl,
+          borderWidth: 1,
+          borderColor: error ? "#D92D20" : "#D0D5DD",
+          backgroundColor: "#F9FAFB",
+        }}
+      >
+        <Ionicons name="search-outline" size={20} color="#667085" />
+
+        <TextInput
+          value={value}
+          onChangeText={handleTextChange}
+          onFocus={() => setOpen(true)}
+          placeholder="Search your college"
+          placeholderTextColor="#667085"
+          autoCapitalize="words"
+          autoCorrect={false}
+          style={{
+            flex: 1,
+            minHeight: 54,
+            marginLeft: SPACING.md,
+            color: "#101828",
+            fontSize: 15,
+          }}
+        />
+
+        {value ? (
+          <Pressable
+            hitSlop={10}
+            onPress={() => {
+              onChange("");
+              setOpen(false);
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color="#98A2B3" />
+          </Pressable>
+        ) : null}
+      </View>
+
+     {open && value.trim().length > 0 ? (
+  <View
+    style={{
+      marginTop: SPACING.sm,
+      maxHeight: 280,
+      borderWidth: 1,
+      borderColor: "#D0D5DD",
+      borderRadius: RADIUS.lg,
+      backgroundColor: "#FFFFFF",
+      overflow: "hidden",
+    }}
+  >
+    {filteredColleges.length > 0 ? (
+      <ScrollView
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        persistentScrollbar
+        keyboardShouldPersistTaps="handled"
+        fadingEdgeLength={24}
+        contentContainerStyle={{
+          paddingVertical: SPACING.sm,
+        }}
+      >
+        {filteredColleges.map((college, index) => (
+  <View key={`${college}-${index}`}>
+    <Pressable
+      onPress={() => {
+        onChange(college);
+        setOpen(false);
+      }}
+      style={({ pressed }) => ({
+        marginHorizontal: SPACING.sm,
+        paddingHorizontal: SPACING.lg,
+        paddingVertical: 14,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
+        borderColor: "#EAECF0",
+        backgroundColor: pressed
+          ? "#EFF4FF"
+          : "#FFFFFF",
+      })}
+    >
+      <Text
+        style={{
+          color: "#344054",
+          fontSize: 14,
+          lineHeight: 21,
+          fontWeight: "500",
+        }}
+      >
+        {college}
+      </Text>
+    </Pressable>
+
+    {index <
+    filteredColleges.length - 1 ? (
+      <View style={{ height: 12 }} />
+    ) : null}
+  </View>
+))}
+      </ScrollView>
+    ) : (
+      <View style={{ padding: SPACING.lg }}>
+        <Text
+          style={{
+            color: "#344054",
+            fontSize: 14,
+            fontWeight: "600",
+          }}
+        >
+          College not found
+        </Text>
+
+        <Text
+          style={{
+            marginTop: 4,
+            color: "#667085",
+            fontSize: 12,
+            lineHeight: 18,
+          }}
+        >
+          Your entered college name will be used as a custom value.
+        </Text>
+      </View>
+    )}
+  </View>
+) : null}
+
+      {error ? (
+        <Text
+          style={{
+            marginTop: SPACING.sm,
+            color: "#D92D20",
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </Text>
+      ) : (
+        <Text
+          style={{
+            marginTop: SPACING.sm,
+            color: "#667085",
+            fontSize: 12,
+            lineHeight: 18,
+          }}
+        >
+          Start typing to search. A custom college name is also accepted.
+        </Text>
+      )}
+    </View>
+  );
+}
 
 export default function SignupScreen() {
-  const [step, setStep] = useState(1);
-
-  const [form, setForm] = useState({
-    type: "student-college",
-
-    name: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-
-    college: "",
-    year: "",
-    joiningyear: "",
-    branch: "",
-    customBranch: "",
-    skills: "",
-
-    degree: "",
-    passOutYear: "",
-
-    currentCompany: "",
-    currentRole: "",
-    experience: "",
-  });
-
-  const [resumeFile, setResumeFile] = useState(null);
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const setAuth = useAuthStore((state) => state.setAuth);
+
+ 
+
+  const selectedBranch =
+    form.branch === "Others" ? form.customBranch.trim() : form.branch;
+
+  const clearError = (key) => {
+    setErrors((previous) => {
+      if (!previous[key]) return previous;
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+  };
 
   const handleChange = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((previous) => ({ ...previous, [key]: value }));
+    clearError(key);
   };
 
-  const selectedBranchValue =
-    form.branch === "Others" ? form.customBranch : form.branch;
+  const handleTypeChange = (type) => {
+    setForm((previous) => ({
+      ...INITIAL_FORM,
+      type,
+      name: previous.name,
+      email: previous.email,
+      phone: previous.phone,
+      password: previous.password,
+      confirmPassword: previous.confirmPassword,
+    }));
+    setErrors({});
+  };
 
-  const acceptedResumeTypes = useMemo(
-    () => [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ],
-    [],
-  );
+  const handleNameChange = (value) => {
+    const cleaned = value
+      .replace(/[^a-zA-Z\s]/g, "")
+      .replace(/\s+/g, " ");
 
-  const validateEmail = (email) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    setForm((previous) => ({ ...previous, name: cleaned }));
 
-  const validatePassword = (password) =>
-    password.length >= 8 &&
-    /[A-Z]/.test(password) &&
-    /[a-z]/.test(password) &&
-    /\d/.test(password) &&
-    /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
+    if (cleaned !== value) {
+      setErrors((previous) => ({
+        ...previous,
+        name: "Name can contain only letters and spaces",
+      }));
+    } else {
+      clearError("name");
+    }
+  };
 
-  const pickResume = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "application/pdf",
-          "application/msword",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+  const handlePhoneChange = (value) => {
+    const cleaned = value.replace(/\D/g, "").slice(0, 10);
+    setForm((previous) => ({ ...previous, phone: cleaned }));
 
-      if (result.canceled) return;
+    if (cleaned.length > 0 && cleaned.length < 10) {
+      setErrors((previous) => ({
+        ...previous,
+        phone: "Phone number must contain exactly 10 digits",
+      }));
+    } else {
+      clearError("phone");
+    }
+  };
 
-      const file = result.assets?.[0];
-      if (!file) return;
+  const handleSkillsChange = (value) => {
+    const containsNumber = /[0-9]/.test(value);
+    const cleaned = value.replace(/[0-9]/g, "");
 
-      const mimeType = file.mimeType || "";
-      const fileSize = file.size || 0;
+    setForm((previous) => ({ ...previous, skills: cleaned }));
 
-      if (!acceptedResumeTypes.includes(mimeType)) {
-        Alert.alert("Validation", "Please upload PDF, DOC, or DOCX only");
-        return;
+    if (containsNumber) {
+      setErrors((previous) => ({
+        ...previous,
+        skills: "Numbers are not allowed in skills or interests",
+      }));
+    } else {
+      clearError("skills");
+    }
+  };
+
+  const getPasswordErrors = (password) => {
+    const problems = [];
+
+    if (password.length < 8) problems.push("at least 8 characters");
+    if (!/[A-Z]/.test(password)) problems.push("one uppercase letter");
+    if (!/[a-z]/.test(password)) problems.push("one lowercase letter");
+    if (!/\d/.test(password)) problems.push("one number");
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(password)) {
+      problems.push("one special character");
+    }
+
+    return problems;
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+
+    if (!ACCOUNT_TYPES.some((item) => item.value === form.type)) {
+      nextErrors.type = "Select a registration type";
+    }
+
+    if (!form.name.trim()) {
+      nextErrors.name = "Full name is required";
+    } else if (form.name.trim().length < 2) {
+      nextErrors.name = "Full name must contain at least 2 characters";
+    }
+
+    const normalizedEmail = form.email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      nextErrors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      nextErrors.email = "Enter a valid email address";
+    }
+
+    if (!form.phone) {
+      nextErrors.phone = "Phone number is required";
+    } else if (!/^\d{10}$/.test(form.phone)) {
+      nextErrors.phone = "Phone number must contain exactly 10 digits";
+    }
+
+    if (!form.password) {
+      nextErrors.password = "Password is required";
+    } else {
+      const passwordProblems = getPasswordErrors(form.password);
+      if (passwordProblems.length > 0) {
+        nextErrors.password = `Password must include ${passwordProblems.join(
+          ", ",
+        )}`;
       }
-
-      if (fileSize > 5 * 1024 * 1024) {
-        Alert.alert("Validation", "Resume size must be less than 5MB");
-        return;
-      }
-
-      setResumeFile(file);
-    } catch (error) {
-      console.log(error);
-      Alert.alert("Error", "Unable to pick resume");
-    }
-  };
-
-  const validateStep1 = () => {
-    if (!form.type) {
-      Alert.alert("Validation", "Please select registration type");
-      return false;
-    }
-    return true;
-  };
-
-  const validateStep2 = () => {
-    const { name, email, phone, password, confirmPassword } = form;
-
-    if (!name || !email || !phone || !password || !confirmPassword) {
-      Alert.alert("Validation", "Please fill all required fields");
-      return false;
     }
 
-    if (!/^[a-zA-Z\s]+$/.test(name.trim())) {
-      Alert.alert("Validation", "Name should contain only letters and spaces");
-      return false;
+    if (!form.confirmPassword) {
+      nextErrors.confirmPassword = "Confirm your password";
+    } else if (form.password !== form.confirmPassword) {
+      nextErrors.confirmPassword = "Passwords do not match";
     }
 
-    if (!validateEmail(email.trim())) {
-      Alert.alert("Validation", "Enter a valid email");
-      return false;
-    }
-
-    if (!/^\d{10}$/.test(phone)) {
-      Alert.alert("Validation", "Phone number must be exactly 10 digits");
-      return false;
-    }
-
-    if (!validatePassword(password)) {
-      Alert.alert(
-        "Validation",
-        "Password must be 8+ chars and include uppercase, lowercase, number, and special character",
-      );
-      return false;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert("Validation", "Passwords do not match");
-      return false;
-    }
-
-    return true;
-  };
-
-  const validateStep3 = () => {
-    const type = form.type;
-
-    if (
-      (type === "student-college" || type === "jobseeker-fresher") &&
-      !selectedBranchValue.trim()
-    ) {
-      Alert.alert("Validation", "Please select or enter your branch");
-      return false;
-    }
-
-    if (type === "student-college") {
+    if (form.type === "student-college") {
       if (!form.college.trim()) {
-        Alert.alert("Validation", "College name is required");
-        return false;
+        nextErrors.college = "College name is required";
       }
-
-      if (!/[a-zA-Z]/.test(form.college)) {
-        Alert.alert("Validation", "College name must contain letters");
-        return false;
-      }
-
       if (!form.year) {
-        Alert.alert("Validation", "Please select year of study");
-        return false;
+        nextErrors.year = "Year of study is required";
       }
-
       if (!form.joiningyear) {
-        Alert.alert("Validation", "Please select joining year");
-        return false;
+        nextErrors.joiningyear = "Joining year is required";
       }
-
+      if (!selectedBranch) {
+        nextErrors.branch = "Branch or specialization is required";
+      } else if (selectedBranch.length < 2) {
+        nextErrors.branch = "Branch must contain at least 2 characters";
+      }
       if (!form.skills.trim()) {
-        Alert.alert("Validation", "Skills / interests are required");
-        return false;
+        nextErrors.skills = "Skills or interests are required";
       }
     }
 
-    if (type === "jobseeker-fresher") {
+    if (form.type === "jobseeker-fresher") {
       if (!form.degree) {
-        Alert.alert("Validation", "Please select degree");
-        return false;
+        nextErrors.degree = "Degree is required";
       }
-
-      if (!form.passOutYear) {
-        Alert.alert("Validation", "Please select pass-out year");
-        return false;
+      if (!form.passoutYear) {
+        nextErrors.passoutYear = "Pass-out year is required";
       }
-
+      if (!selectedBranch) {
+        nextErrors.branch = "Branch or specialization is required";
+      } else if (selectedBranch.length < 2) {
+        nextErrors.branch = "Branch must contain at least 2 characters";
+      }
       if (!form.skills.trim()) {
-        Alert.alert("Validation", "Skills / interests are required");
-        return false;
-      }
-
-      if (!resumeFile) {
-        Alert.alert("Validation", "Resume is required");
-        return false;
+        nextErrors.skills = "Skills or interests are required";
       }
     }
 
-    if (type === "working-professional") {
+    if (form.type === "working-professional") {
       if (!form.currentCompany.trim()) {
-        Alert.alert("Validation", "Current company is required");
-        return false;
+        nextErrors.currentCompany = "Current company is required";
       }
-
       if (!form.currentRole.trim()) {
-        Alert.alert("Validation", "Current role is required");
-        return false;
+        nextErrors.currentRole = "Current role is required";
       }
-
       if (!form.experience) {
-        Alert.alert("Validation", "Please select years of experience");
-        return false;
+        nextErrors.experience = "Years of experience is required";
       }
-
       if (!form.skills.trim()) {
-        Alert.alert("Validation", "Skills / interests are required");
-        return false;
-      }
-
-      if (!resumeFile) {
-        Alert.alert("Validation", "Resume is required");
-        return false;
+        nextErrors.skills = "Skills or interests are required";
       }
     }
 
-    if (/\d/.test(form.skills)) {
-      Alert.alert("Validation", "Numbers are not allowed in skills");
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      const firstMessage = Object.values(nextErrors)[0];
+      Alert.alert("Check your details", firstMessage);
       return false;
     }
 
     return true;
   };
 
-  const handleNext = () => {
-    if (step === 1 && !validateStep1()) return;
-    if (step === 2 && !validateStep2()) return;
-    if (step === 3 && !validateStep3()) return;
-    setStep((prev) => prev + 1);
-  };
+  const buildPayload = () => {
+    const common = {
+      type: form.type,
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      phone: form.phone,
+      password: form.password,
+      skills: form.skills.trim(),
+    };
 
-  const handleBack = () => {
-    if (step > 1) setStep((prev) => prev - 1);
+    if (form.type === "student-college") {
+      return {
+        ...common,
+        college: form.college.trim(),
+        year: form.year,
+        joiningyear: form.joiningyear,
+        branch: selectedBranch,
+      };
+    }
+
+    if (form.type === "jobseeker-fresher") {
+      return {
+        ...common,
+        degree: form.degree,
+        passoutYear: form.passoutYear,
+        branch: selectedBranch,
+      };
+    }
+
+    return {
+      ...common,
+      currentCompany: form.currentCompany.trim(),
+      currentRole: form.currentRole.trim(),
+      experience: form.experience,
+    };
   };
 
   const handleSignup = async () => {
-    if (!validateStep1()) return;
-    if (!validateStep2()) return;
-    if (!validateStep3()) return;
+    if (loading || !validateForm()) return;
 
     try {
       setLoading(true);
 
-      const payload = {
-        type: form.type,
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone,
+      const signupResponse = await signupUserApi(buildPayload());
+
+      if (!signupResponse?.success) {
+        throw new Error(signupResponse?.message || "Registration failed");
+      }
+
+      // The signup endpoint currently creates the user but does not return a JWT.
+      // Log in immediately with the same credentials to obtain the token and the
+      // server-stored user.type, then persist both through the existing auth store.
+      const loginResponse = await loginUserApi({
+        email: form.email.trim().toLowerCase(),
         password: form.password,
+      });
 
-        college: form.college.trim(),
-        year: form.year,
-        joiningyear:
-          form.type === "jobseeker-fresher"
-            ? form.passOutYear
-            : form.joiningyear,
-        branch: selectedBranchValue.trim(),
-        skills: form.skills.trim(),
+      if (!loginResponse?.success) {
+        Alert.alert(
+          "Account created",
+          "Your account was created, but automatic login failed. Please log in manually.",
+          [
+            {
+              text: "Go to Login",
+              onPress: () => router.replace("/auth/login"),
+            },
+          ],
+        );
+        return;
+      }
 
-        degree: form.degree,
-        currentCompany: form.currentCompany.trim(),
-        currentRole: form.currentRole.trim(),
-        experience: form.experience,
+      const token =
+        loginResponse.token ||
+        loginResponse.accessToken ||
+        loginResponse.jwt ||
+        loginResponse.data?.token ||
+        loginResponse.data?.accessToken ||
+        null;
 
-        resume: resumeFile || null,
+      const responseUser =
+        loginResponse.user || loginResponse.data?.user || null;
+
+      if (!token || !responseUser) {
+        throw new Error("Login succeeded without a token or user record");
+      }
+
+      const authenticatedUser = {
+        ...responseUser,
+        // Backend login should return this. The fallback keeps the selected type
+        // available in the app even if an older backend response omits it.
+        type: responseUser.type || form.type,
       };
 
-      const response = await signupUserApi(payload);
+      await setAuth({
+        user: authenticatedUser,
+        token,
+      });
 
-      if (response?.success) {
-        Alert.alert("Success", "Signup successful");
-        router.replace("/(protected)/home");
-      } else {
-        Alert.alert("Signup Failed", response?.message || "Try again");
-      }
+      router.replace("/(protected)/home");
     } catch (error) {
-      console.log(error);
-      Alert.alert("Error", "Unable to signup");
+      Alert.alert(
+        "Registration failed",
+        error?.response?.data?.message ||
+          error?.message ||
+          "Unable to create your account",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const renderPicker = (label, value, onValueChange, items, placeholder) => (
-      <View className="mb-4">
-        <Text className="mb-2 text-[13px] font-semibold text-[#101828]">
-          {label}
-        </Text>
-
-        <View className="h-[58px] justify-center rounded-[22px] border border-[#5587eb] bg-white px-2">
-          <Picker
-            selectedValue={value}
-            onValueChange={onValueChange}
-            dropdownIconColor="#667085"
-            style={{
-              color: "#101828",
-              height: 58,
-            }}
-          >
-            <Picker.Item label={placeholder} value="" color="#98A2B3" />
-          
-            {items.map((item) => (
-              <Picker.Item key={item} label={item} value={item} color="#101828" />
-            ))}
-          </Picker>
-        </View>
-      </View>
-   );
-
-  const renderStepIndicator = () => {
-    const labels = ["Type", "Basic", "Details", "Review"];
-    return (
-      <View className="mb-6 flex-row items-center justify-between">
-        {labels.map((label, index) => {
-          const current = index + 1;
-          const active = current === step;
-          const done = current < step;
-
-          return (
-            <View key={label} className="flex-1 items-center">
-              <View
-                className={`h-11 w-11 items-center justify-center rounded-full ${
-                  done || active ? "bg-[#0F5EFF]" : "bg-[#D0D5DD]"
-                }`}
-              >
-                <Text className="font-bold text-white">{current}</Text>
-              </View>
-              <Text
-                className={`mt-3 text-[12px] font-medium ${active ? "text-[#0F5EFF]" : "text-[#98A2B3]"}`}
-              >
-                {label}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-    );
-  };
-
-  const renderStep1 = () => (
-    <View>
-      <Text className="mb-4 text-xl font-semibold text-black">
-        Select Registration Type
-      </Text>
-
-      {renderPicker(
-        "Registration Type *",
-        form.type,
-        (v) =>
-          setForm((prev) => ({
-            ...prev,
-            type: v,
-            branch: "",
-            customBranch: "",
-            college: "",
-            year: "",
-            joiningyear: "",
-            degree: "",
-            passOutYear: "",
-            currentCompany: "",
-            currentRole: "",
-            experience: "",
-            skills: "",
-          })),
-        ["student-college", "jobseeker-fresher", "working-professional"],
-        "Select registration type",
-      )}
-    </View>
-  );
-
-  const renderStep2 = () => (
-    <View>
-      <Text className="mb-4 text-xl font-semibold text-black">
-        Basic Details
-      </Text>
-
-<AppInput
-  label="Full Name"
-  icon="person-outline"
-  placeholder="Full Name"
-  value={form.name}
-  onChangeText={(v) =>
-    handleChange("name", v.replace(/[^a-zA-Z\s]/g, ""))
-  }
-/>
-
-<AppInput
-  label="Email"
-  icon="mail-outline"
-  placeholder="Email"
-  value={form.email}
-  keyboardType="email-address"
-  onChangeText={(v) => handleChange("email", v)}
-/>
-<AppInput
-  label="Phone Number"
-  icon="call-outline"
-  placeholder="Phone Number"
-  value={form.phone}
-  keyboardType="phone-pad"
-  onChangeText={(v) =>
-    handleChange("phone", v.replace(/\D/g, ""))
-  }
-/>
-
-<AppInput
-  label="Password"
-  icon="lock-closed-outline"
-  placeholder="Password"
-  value={form.password}
-  secureTextEntry
-  onChangeText={(v) => handleChange("password", v)}
-/>
-
-<AppInput
-  label="Confirm Password"
-  icon="shield-checkmark-outline"
-  placeholder="Confirm Password"
-  value={form.confirmPassword}
-  secureTextEntry
-  onChangeText={(v) =>
-    handleChange("confirmPassword", v)
-  }
-/>
-    </View>
-  );
-
-  const renderStep3 = () => {
-    if (form.type === "student-college") {
-      return (
-        <View>
-          <Text className="mb-4 text-xl font-semibold text-black">
-            Student Details
-          </Text>
-
-          <AppInput
-  label="College Name"
-  icon="school-outline"
-  placeholder="College Name"
-  value={form.college}
-  onChangeText={(v) =>
-    handleChange(
-      "college",
-      v.replace(/[^a-zA-Z\s]/g, "")
-    )
-  }
-/>
-          {renderPicker(
-            "Year of Study *",
-            form.year,
-            (v) => handleChange("year", v),
-            ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-            "Select year",
-          )}
-
-          {renderPicker(
-            "Joining Year *",
-            form.joiningyear,
-            (v) => handleChange("joiningyear", v),
-            joiningYearOptions,
-            "Select joining year",
-          )}
-
-          {renderPicker(
-            "Branch / Specialization *",
-            form.branch,
-            (v) => handleChange("branch", v),
-            branchOptions,
-            "Select branch",
-          )}
-
-          {form.branch === "Others" && (
-            <TextInput
-              placeholder="Enter your branch"
-              value={form.customBranch}
-              onChangeText={(v) =>
-                handleChange("customBranch", v.replace(/[^a-zA-Z\s]/g, ""))
-              }
-              className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-              placeholderTextColor="#667085"
-            />
-          )}
-
-          <TextInput
-            placeholder="Skills / Interests"
-            value={form.skills}
-            multiline
-            onChangeText={(v) =>
-              handleChange("skills", v.replace(/[0-9]/g, ""))
-            }
-            className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-            placeholderTextColor="#667085"
-            style={{ minHeight: 90, textAlignVertical: "top" }}
-          />
-
-          <Pressable
-            onPress={pickResume}
-            className="mb-4 rounded-[24px] border border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-5 py-5"
-          >
-            <Text className="text-center text-gray-700">
-              {resumeFile?.name
-                ? `Resume: ${resumeFile.name}`
-                : "Upload Resume (Optional)"}
-            </Text>
-          </Pressable>
-        </View>
-      );
-    }
-
-    if (form.type === "jobseeker-fresher") {
-      return (
-        <View>
-          <Text className="mb-4 text-xl font-semibold text-black">
-            Fresher Details
-          </Text>
-
-          <Pressable
-            onPress={pickResume}
-            className="mb-4 rounded-[24px] border border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-5 py-5"
-          >
-            <Text className="text-center text-[#667085]">
-              {resumeFile?.name
-                ? `Resume: ${resumeFile.name}`
-                : "Upload Resume *"}
-            </Text>
-          </Pressable>
-
-          {renderPicker(
-            "Degree *",
-            form.degree,
-            (v) => handleChange("degree", v),
-            degreeOptions,
-            "Select degree",
-          )}
-
-          {renderPicker(
-            "Pass-out Year *",
-            form.passOutYear,
-            (v) => handleChange("passOutYear", v),
-            passOutYearOptions,
-            "Select pass-out year",
-          )}
-
-          {renderPicker(
-            "Branch / Specialization *",
-            form.branch,
-            (v) => handleChange("branch", v),
-            branchOptions,
-            "Select branch",
-          )}
-
-          {form.branch === "Others" && (
-            <TextInput
-              placeholder="Enter your branch"
-              value={form.customBranch}
-              onChangeText={(v) =>
-                handleChange("customBranch", v.replace(/[^a-zA-Z\s]/g, ""))
-              }
-              className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-              placeholderTextColor="#667085"
-            />
-          )}
-
-          <TextInput
-            placeholder="Skills / Interests"
-            value={form.skills}
-            multiline
-            onChangeText={(v) =>
-              handleChange("skills", v.replace(/[0-9]/g, ""))
-            }
-            className="mb-4 rounded-[22px] border border-[#D0D5DD] bg-[#F9FAFB] px-5 py-4 text-[15px] text-[#101828]"
-            placeholderTextColor="#667085"
-            style={{ minHeight: 90, textAlignVertical: "top" }}
-          />
-        </View>
-      );
-    }
-
-    return (
-      <View>
-        <Text className="mb-4 text-xl font-semibold text-black">
-          Professional Details
-        </Text>
-
-        <AppInput
-          label="Current Company"
-          icon="business-outline"
-          placeholder="Current Company"
-          value={form.currentCompany}
-          onChangeText={(v) =>
-            handleChange("currentCompany", v)
-          }
-        />
-
-        <AppInput
-          label="Current Role"
-          icon="briefcase-outline"
-          placeholder="Current Role"
-          value={form.currentRole}
-          onChangeText={(v) =>
-            handleChange("currentRole", v)
-          }
-        />
-
-        {renderPicker(
-          "Years of Experience *",
-          form.experience,
-          (v) => handleChange("experience", v),
-          experienceOptions,
-          "Select experience",
-        )}
-
-       <AppInput
-         label="Skills / Interests"
-         icon="bulb-outline"
-         placeholder="Skills / Interests"
-         value={form.skills}
-         multiline
-         onChangeText={(v) =>
-           handleChange(
-             "skills",
-             v.replace(/[0-9]/g, "")
-           )
-         }
-       />
-
-        <Pressable
-          onPress={pickResume}
-          className="mb-4 rounded-[24px] border border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-5 py-5"
+  return (
+    <AppScreen
+      bottomSpace={48}
+      contentStyle={{ paddingTop: SPACING.xl }}
+      maxWidth={560}
+    >
+      <View style={{ marginBottom: SPACING.xxl }}>
+        <Text
+          style={{
+            color: "#101828",
+            fontSize: 28,
+            lineHeight: 34,
+            fontWeight: "800",
+          }}
         >
-          <Text className="text-center text-[#667085]">
-            {resumeFile?.name ? `Resume: ${resumeFile.name}` : "Upload Resume *"}
-          </Text>
-        </Pressable>
+          Create Account
+        </Text>
+        <Text
+          style={{
+            marginTop: SPACING.sm,
+            color: "#667085",
+            fontSize: 15,
+            lineHeight: 23,
+          }}
+        >
+          Choose your account type and complete the relevant details below.
+        </Text>
       </View>
-    );
-  };
 
-  const renderStep4 = () => (
-    <View>
-      <Text className="mb-4 text-xl font-semibold text-black">
-        Review Details
-      </Text>
+      <View
+        style={{
+           paddingVertical: SPACING.lg,
+          borderRadius: RADIUS.xl,
+          backgroundColor: "#FFFFFF",
+        }}
+      >
+      <PickerField
+  label="Registration Type *"
+  value={form.type}
+  placeholder="Select registration type"
+  options={ACCOUNT_TYPES}
+  onValueChange={handleTypeChange}
+  error={errors.type}
+/>
+       
 
-      <View className="rounded-[28px] bg-white p-6">
-        <Text className="mb-2 text-gray-800">Type: {form.type}</Text>
-        <Text className="mb-2 text-gray-800">Name: {form.name}</Text>
-        <Text className="mb-2 text-gray-800">Email: {form.email}</Text>
-        <Text className="mb-2 text-gray-800">Phone: {form.phone}</Text>
+        <SectionTitle title="Basic Details" />
 
-        {form.type === "student-college" && (
+        <AppInput
+          label="Full Name *"
+          icon="person-outline"
+          placeholder="Enter your full name"
+          value={form.name}
+          onChangeText={handleNameChange}
+          autoCapitalize="words"
+          style={{ marginBottom: errors.name ? SPACING.sm : SPACING.xl }}
+        />
+        <FieldError message={errors.name} />
+
+        <AppInput
+          label="Email *"
+          icon="mail-outline"
+          placeholder="youremail@example.com"
+          value={form.email}
+          onChangeText={(value) => handleChange("email", value)}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          style={{ marginBottom: errors.email ? SPACING.sm : SPACING.xl }}
+        />
+        <FieldError message={errors.email} />
+
+        <AppInput
+          label="Phone Number *"
+          icon="call-outline"
+          placeholder="Enter 10-digit phone number"
+          value={form.phone}
+          onChangeText={handlePhoneChange}
+          keyboardType="phone-pad"
+          style={{ marginBottom: errors.phone ? SPACING.sm : SPACING.xl }}
+        />
+        <FieldError message={errors.phone} />
+
+        <AppInput
+          label="Password *"
+          icon="lock-closed-outline"
+          placeholder="Create a strong password"
+          value={form.password}
+          onChangeText={(value) => handleChange("password", value)}
+          secureTextEntry={!showPassword}
+          rightText={showPassword ? "Hide" : "Show"}
+          onRightPress={() => setShowPassword((previous) => !previous)}
+          style={{ marginBottom: errors.password ? SPACING.sm : SPACING.xl }}
+        />
+        <FieldError message={errors.password} />
+
+        <Text
+          style={{
+            marginTop: -8,
+            marginBottom: SPACING.xl,
+            color: "#667085",
+            fontSize: 12,
+            lineHeight: 18,
+          }}
+        >
+          Use at least 8 characters with uppercase, lowercase, number and special
+          character.
+        </Text>
+
+        <AppInput
+          label="Confirm Password *"
+          icon="shield-checkmark-outline"
+          placeholder="Confirm your password"
+          value={form.confirmPassword}
+          onChangeText={(value) => handleChange("confirmPassword", value)}
+          secureTextEntry={!showConfirmPassword}
+          rightText={showConfirmPassword ? "Hide" : "Show"}
+          onRightPress={() =>
+            setShowConfirmPassword((previous) => !previous)
+          }
+          style={{
+            marginBottom: errors.confirmPassword ? SPACING.sm : SPACING.xl,
+          }}
+        />
+        <FieldError message={errors.confirmPassword} />
+
+        {form.type === "student-college" ? (
           <>
-            <Text className="mb-2 text-gray-800">College: {form.college}</Text>
-            <Text className="mb-2 text-gray-800">Year: {form.year}</Text>
-            <Text className="mb-2 text-gray-800">
-              Joining Year: {form.joiningyear}
-            </Text>
-            <Text className="mb-2 text-gray-800">
-              Branch: {selectedBranchValue}
-            </Text>
-            <Text className="mb-2 text-gray-800">Skills: {form.skills}</Text>
-          </>
-        )}
+            <SectionTitle title="Academic Details" />
 
-        {form.type === "jobseeker-fresher" && (
-          <>
-            <Text className="mb-2 text-gray-800">Degree: {form.degree}</Text>
-            <Text className="mb-2 text-gray-800">
-              Pass-out Year: {form.passOutYear}
-            </Text>
-            <Text className="mb-2 text-gray-800">
-              Branch: {selectedBranchValue}
-            </Text>
-            <Text className="mb-2 text-gray-800">Skills: {form.skills}</Text>
-            <Text className="mb-2 text-gray-800">
-              Resume: {resumeFile?.name || "Not selected"}
-            </Text>
-          </>
-        )}
-
-        {form.type === "working-professional" && (
-          <>
-            <Text className="mb-2 text-gray-800">
-              Current Company: {form.currentCompany}
-            </Text>
-            <Text className="mb-2 text-gray-800">
-              Current Role: {form.currentRole}
-            </Text>
-            <Text className="mb-2 text-gray-800">
-              Experience: {form.experience}
-            </Text>
-            <Text className="mb-2 text-gray-800">Skills: {form.skills}</Text>
-            <Text className="mb-2 text-gray-800">
-              Resume: {resumeFile?.name || "Not selected"}
-            </Text>
-          </>
-        )}
-      </View>
-    </View>
-  );
-
-return (
-  <AppScreen>
-        <View className="mb-8">
-          <Text className="text-[36px] font-bold leading-[44px] text-[#101828]">
-            Create{"\n"}Account
-          </Text>
-
-          <Text className="mt-4 text-[15px] leading-7 text-[#667085]">
-            Join GyanNidhi and access events, placements,
-            HireAI interviews, and smart verification tools.
-          </Text>
-        </View>
-
-        {renderStepIndicator()}
-
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-        {step === 4 && renderStep4()}
-
-        <View className="mt-6 flex-row justify-between">
-          {step > 1 ? (
-            <AppButton
-              title="Back"
-              variant="secondary"
-              onPress={handleBack}
+            <CollegeSearchField
+              value={form.college}
+              onChange={(value) => handleChange("college", value)}
+              error={errors.college}
             />
-          ) : (
-            <View />
-          )}
 
-          {step < 4 ? (
-            <AppButton
-             title="Next"
-             onPress={handleNext}
-           />
-          ) : (
-            <AppButton
-               title={loading ? "Creating..." : "Submit"}
-               loading={loading}
-               onPress={handleSignup}
-             />
-          )}
-        </View>
+            <PickerField
+              label="Year of Study *"
+              value={form.year}
+              placeholder="Select year of study"
+              options={YEAR_OF_STUDY_OPTIONS}
+              onValueChange={(value) => handleChange("year", value)}
+              error={errors.year}
+            />
 
-        <Pressable onPress={() => router.push("/auth/login")}>
-          <Text className="mt-8 text-center text-[14px] font-semibold text-[#0F5EFF]">
-            Already have an account? Login
-          </Text>
-        </Pressable>
-      </AppScreen>
-);
+            <PickerField
+              label="Joining Year *"
+              value={form.joiningyear}
+              placeholder="Select joining year"
+              options={JOINING_YEAR_OPTIONS}
+              onValueChange={(value) => handleChange("joiningyear", value)}
+              error={errors.joiningyear}
+            />
+
+            <PickerField
+              label="Branch / Specialization *"
+              value={form.branch}
+              placeholder="Select branch"
+              options={BRANCH_OPTIONS}
+              onValueChange={(value) => {
+                handleChange("branch", value);
+                if (value !== "Others") {
+                  handleChange("customBranch", "");
+                }
+              }}
+              error={errors.branch}
+            />
+
+            {form.branch === "Others" ? (
+              <>
+                <AppInput
+                  label="Enter Branch / Specialization *"
+                  icon="school-outline"
+                  placeholder="Enter your branch"
+                  value={form.customBranch}
+                  onChangeText={(value) =>
+                    handleChange(
+                      "customBranch",
+                      value.replace(/[^a-zA-Z\s]/g, ""),
+                    )
+                  }
+                  autoCapitalize="words"
+                  style={{
+                    marginBottom: errors.branch ? SPACING.sm : SPACING.xl,
+                  }}
+                />
+                <FieldError message={errors.branch} />
+              </>
+            ) : null}
+
+            <SectionTitle title="Skills & Interests" />
+
+            <AppInput
+              label="Skills / Interests *"
+              icon="bulb-outline"
+              placeholder="Example: React, Python, PCB Design"
+              value={form.skills}
+              onChangeText={handleSkillsChange}
+              multiline
+              style={{ marginBottom: errors.skills ? SPACING.sm : SPACING.xl }}
+            />
+            <FieldError message={errors.skills} />
+          </>
+        ) : null}
+
+        {form.type === "jobseeker-fresher" ? (
+          <>
+            <SectionTitle title="Education Details" />
+
+            <PickerField
+              label="Degree *"
+              value={form.degree}
+              placeholder="Select degree"
+              options={DEGREE_OPTIONS}
+              onValueChange={(value) => handleChange("degree", value)}
+              error={errors.degree}
+            />
+
+            <PickerField
+              label="Pass-out Year *"
+              value={form.passoutYear}
+              placeholder="Select pass-out year"
+              options={PASSOUT_YEAR_OPTIONS}
+              onValueChange={(value) => handleChange("passoutYear", value)}
+              error={errors.passoutYear}
+            />
+
+            <PickerField
+              label="Branch / Specialization *"
+              value={form.branch}
+              placeholder="Select branch"
+              options={BRANCH_OPTIONS}
+              onValueChange={(value) => {
+                handleChange("branch", value);
+                if (value !== "Others") {
+                  handleChange("customBranch", "");
+                }
+              }}
+              error={errors.branch}
+            />
+
+            {form.branch === "Others" ? (
+              <>
+                <AppInput
+                  label="Enter Branch / Specialization *"
+                  icon="school-outline"
+                  placeholder="Enter your branch"
+                  value={form.customBranch}
+                  onChangeText={(value) =>
+                    handleChange(
+                      "customBranch",
+                      value.replace(/[^a-zA-Z\s]/g, ""),
+                    )
+                  }
+                  autoCapitalize="words"
+                  style={{
+                    marginBottom: errors.branch ? SPACING.sm : SPACING.xl,
+                  }}
+                />
+                <FieldError message={errors.branch} />
+              </>
+            ) : null}
+
+            <SectionTitle title="Skills & Interests" />
+
+            <AppInput
+              label="Skills / Interests *"
+              icon="bulb-outline"
+              placeholder="Example: JavaScript, React, Python"
+              value={form.skills}
+              onChangeText={handleSkillsChange}
+              multiline
+              style={{ marginBottom: errors.skills ? SPACING.sm : SPACING.xl }}
+            />
+            <FieldError message={errors.skills} />
+          </>
+        ) : null}
+
+               {form.type === "working-professional" ? (
+          <>
+            <SectionTitle title="Professional Information" />
+
+            <AppInput
+              label="Current Company *"
+              icon="business-outline"
+              placeholder="Enter company name"
+              value={form.currentCompany}
+              onChangeText={(value) => handleChange("currentCompany", value)}
+              autoCapitalize="words"
+              style={{
+                marginBottom: errors.currentCompany
+                  ? SPACING.sm
+                  : SPACING.xl,
+              }}
+            />
+            <FieldError message={errors.currentCompany} />
+
+            <AppInput
+              label="Current Role *"
+              icon="briefcase-outline"
+              placeholder="Enter your current role"
+              value={form.currentRole}
+              onChangeText={(value) => handleChange("currentRole", value)}
+              autoCapitalize="words"
+              style={{
+                marginBottom: errors.currentRole
+                  ? SPACING.sm
+                  : SPACING.xl,
+              }}
+            />
+            <FieldError message={errors.currentRole} />
+
+            <PickerField
+              label="Years of Experience *"
+              value={form.experience}
+              placeholder="Select experience"
+              options={EXPERIENCE_OPTIONS}
+              onValueChange={(value) => handleChange("experience", value)}
+              error={errors.experience}
+            />
+
+            <SectionTitle title="Skills & Interests" />
+
+            <AppInput
+              label="Skills / Interests *"
+              icon="bulb-outline"
+              placeholder="Example: Project Management, AWS, FinTech"
+              value={form.skills}
+              onChangeText={handleSkillsChange}
+              multiline
+              style={{
+                marginBottom: errors.skills
+                  ? SPACING.sm
+                  : SPACING.xl,
+              }}
+            />
+            <FieldError message={errors.skills} />
+          </>
+        ) : null}
+      </View>
+
+{/* Actions outside the white registration form */}
+<View
+  style={{
+    width: "100%",
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 30,
+  }}
+>
+  {/* Blue Register button */}
+  <View
+    style={{
+      width: "88%",
+      height: 50,
+      backgroundColor: "#022670",
+      borderRadius: 14,
+      overflow: "hidden",
+    }}
+  >
+    <Pressable
+      disabled={loading}
+      onPress={handleSignup}
+      style={{
+        width: "100%",
+        height: "100%",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+     {loading ? (
+  <View
+    style={{
+      width: "100%",
+      height: 50,
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <ActivityIndicator
+      size="small"
+      color="#FFFFFF"
+    />
+  </View>
+) : (
+  <Text
+    style={{
+      width: "100%",
+      height: 50,
+      lineHeight: 50,
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "700",
+      textAlign: "center",
+      textAlignVertical: "center",
+      includeFontPadding: false,
+    }}
+  >
+    Register
+  </Text>
+)}
+    </Pressable>
+  </View>
+
+  {/* Gap between Register and login */}
+  <View style={{ height: 24 }} />
+
+  <Pressable
+    disabled={loading}
+    onPress={() => router.replace("/auth/login")}
+    style={{
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    }}
+  >
+    <Text
+      style={{
+        color: "#667085",
+        fontSize: 14,
+        textAlign: "center",
+      }}
+    >
+      Already have an account?{" "}
+      <Text
+        style={{
+          color: "#0F5EFF",
+          fontWeight: "700",
+        }}
+      >
+        Log in
+      </Text>
+    </Text>
+  </Pressable>
+</View>
+
+   </AppScreen>
+  );
 }

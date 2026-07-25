@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, View } from "react-native";
+import { KeyboardAvoidingView, Platform, View,  RefreshControl, } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -15,7 +15,9 @@ export default function AppScreen({
   keyboardOffset = 0,
   centered = false,
   maxWidth = 520,
-  bottomSpace = 130,
+  bottomSpace = 0,
+  refreshing = false,
+  onRefresh,
 }) {
   const insets = useSafeAreaInsets();
 
@@ -31,14 +33,22 @@ export default function AppScreen({
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : "undefined"}
         keyboardVerticalOffset={keyboardOffset}
       >
         <ContentWrapper
           {...(scroll
             ? {
                 enableOnAndroid: true,
-                extraScrollHeight: 40,
+                refreshControl: onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        ) : undefined,
+                extraScrollHeight: 12,
                 keyboardShouldPersistTaps: "handled",
                 showsVerticalScrollIndicator: false,
                 contentContainerStyle: {

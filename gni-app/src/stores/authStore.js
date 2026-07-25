@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 
+import {
+  deactivateCurrentNotificationInstallation,
+} from "../services/notificationService";
+
 export const useAuthStore = create((set, get) => ({
   notifications: [],
   registeredEvents: [],
@@ -81,14 +85,45 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync("authToken");
-    await SecureStore.deleteItemAsync("authUser");
+  const currentUser = get().user;
 
-    set({
-      user: null,
-      token: null,
-      unreadNotificationCount: 0,
-      authLoading: false,
-    });
-  },
+  const userId =
+    currentUser?.id ||
+    currentUser?._id;
+
+  /*
+   * Best-effort server cleanup.
+   *
+   * Failure must not prevent the user from
+   * logging out locally.
+   */
+  try {
+    if (userId) {
+      await deactivateCurrentNotificationInstallation(
+        userId,
+      );
+    }
+  } catch (error) {
+    console.log(
+      "Notification device deactivation failed:",
+      error?.message || error,
+    );
+  }
+
+  await SecureStore.deleteItemAsync(
+    "authToken",
+  );
+
+  await SecureStore.deleteItemAsync(
+    "authUser",
+  );
+
+  set({
+    user: null,
+    token: null,
+    unreadNotificationCount: 0,
+    authLoading: false,
+  });
+},
+
 }));

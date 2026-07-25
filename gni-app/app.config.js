@@ -1,13 +1,13 @@
 export default {
   expo: {
-    name: "gni-app",
+    name: "GyanNidhi",
     slug: "gni-app",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/app-icon.png",
     scheme: "gniapp",
     userInterfaceStyle: "automatic",
-    newArchEnabled: true,
+    newArchEnabled:true,
 
     ios: {
       supportsTablet: true,
@@ -20,12 +20,12 @@ export default {
 
       permissions: ["CAMERA", "RECORD_AUDIO"],
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/icon.png",
+        backgroundColor: "#FFFFFF",
+        foregroundImage: "./assets/images/app-icon.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-      package: "com.anonymous.gniapp",
+      package: "com.gyannidhi.mobile",
     },
 
     web: {
@@ -44,7 +44,15 @@ export default {
             "Allow GyanNidhi to record premises video.",
         },
       ],
-      "expo-notifications",
+
+      [
+  "expo-notifications",
+  {
+    icon: "./assets/images/gyan-icon.png",
+    color: "#ffffff",
+    defaultChannel: "default",
+  },
+],
       [
         "expo-splash-screen",
         {
@@ -53,7 +61,7 @@ export default {
           resizeMode: "contain",
           backgroundColor: "#ffffff",
           dark: {
-            backgroundColor: "#000000",
+            backgroundColor: "#ffffff",
           },
         },
       ],

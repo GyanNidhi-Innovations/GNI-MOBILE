@@ -1,225 +1,562 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  FlatList,
   ActivityIndicator,
-  Pressable,
   Alert,
+  FlatList,
+  Image,
+  Pressable,
+  Text,
+  View,
 } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
 import AppScreen from "@/components/common/AppScreen";
+import ScreenHeader from "@/components/ui/ScreenHeader";
+import { useResponsive } from "@/hooks/useResponsive";
 import { COLORS } from "@/theme";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function formatDateHeading(dateString) {
   const date = new Date(dateString);
   const today = new Date();
   const yesterday = new Date();
 
-  yesterday.setDate(today.getDate() - 1);
+  yesterday.setDate(
+    today.getDate() - 1,
+  );
 
   const isSameDay = (a, b) =>
     a.getDate() === b.getDate() &&
     a.getMonth() === b.getMonth() &&
-    a.getFullYear() === b.getFullYear();
+    a.getFullYear() ===
+      b.getFullYear();
 
-  if (isSameDay(date, today)) return "Today";
-  if (isSameDay(date, yesterday)) return "Yesterday";
+  if (isSameDay(date, today)) {
+    return "Today";
+  }
 
-  return date.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  if (isSameDay(date, yesterday)) {
+    return "Yesterday";
+  }
+
+  return date.toLocaleDateString(
+    undefined,
+    {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    },
+  );
 }
 
 export default function NotificationsScreen() {
-  const user = useAuthStore((state) => state.user);
-
-  const setUnreadNotificationCount = useAuthStore(
-    (state) => state.setUnreadNotificationCount
+  const user = useAuthStore(
+    (state) => state.user,
   );
 
-  const decrementUnreadNotificationCount = useAuthStore(
-    (state) => state.decrementUnreadNotificationCount
-  );
+  const setUnreadNotificationCount =
+    useAuthStore(
+      (state) =>
+        state.setUnreadNotificationCount,
+    );
 
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const decrementUnreadNotificationCount =
+    useAuthStore(
+      (state) =>
+        state.decrementUnreadNotificationCount,
+    );
 
-  const userId = user?.id || user?._id;
+  const [notifications, setNotifications] =
+    useState([]);
+  const [loading, setLoading] =
+    useState(true);
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const hasLoadedOnceRef =
+    useRef(false);
+
+  const userId =
+    user?.id || user?._id;
+
   const insets = useSafeAreaInsets();
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      if (!userId) {
-        setNotifications([]);
-        setUnreadNotificationCount(0);
-        return;
+  const {
+    isCompactPhone,
+    type,
+    layout,
+  } = useResponsive();
+
+  const fetchNotifications =
+    useCallback(async () => {
+      try {
+        if (!userId) {
+          setNotifications([]);
+          setUnreadNotificationCount(0);
+          return;
+        }
+
+        const response = await apiClient(
+          `/notifications/user/${userId}`,
+        );
+
+        const fetchedNotifications =
+          response?.notifications || [];
+
+        setNotifications(
+          fetchedNotifications,
+        );
+
+        const unreadItems =
+          fetchedNotifications.filter(
+            (item) => !item.read,
+          ).length;
+
+        setUnreadNotificationCount(
+          unreadItems,
+        );
+      } catch (error) {
+        console.log(
+          "fetch notifications error:",
+          error,
+        );
+
+        Alert.alert(
+          "Unable to load alerts",
+          error?.message ||
+            "Please try again.",
+        );
       }
+    }, [
+      userId,
+      setUnreadNotificationCount,
+    ]);
 
-      const res = await apiClient(`/notifications/user/${userId}`);
-      const fetchedNotifications = res?.notifications || [];
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-      setNotifications(fetchedNotifications);
+      const loadNotifications =
+        async () => {
+          try {
+            if (
+              !hasLoadedOnceRef.current
+            ) {
+              setLoading(true);
+            }
 
-      const unreadItems = fetchedNotifications.filter(
-        (item) => !item.read
-      ).length;
+            await fetchNotifications();
 
-      setUnreadNotificationCount(unreadItems);
-    } catch (error) {
-      console.log(error);
-      Alert.alert(
-        "Error",
-        error?.message || "Failed to load notifications"
-      );
-    }
-  }, [userId, setUnreadNotificationCount]);
+            hasLoadedOnceRef.current =
+              true;
+          } finally {
+            if (active) {
+              setLoading(false);
+            }
+          }
+        };
+
+      loadNotifications();
+
+      return () => {
+        active = false;
+      };
+    }, [fetchNotifications]),
+  );
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      await fetchNotifications();
-      setLoading(false);
-    };
+    const subscription =
+      Notifications.addNotificationReceivedListener(
+        () => {
+          fetchNotifications();
+        },
+      );
 
-    load();
+    return () => {
+      subscription.remove();
+    };
   }, [fetchNotifications]);
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchNotifications();
-    setRefreshing(false);
+    try {
+      setRefreshing(true);
+      await fetchNotifications();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const handleMarkAsRead = async (notificationId) => {
+  const handleMarkAsRead = async (
+    notificationId,
+  ) => {
     try {
-      await apiClient(`/notifications/${notificationId}/read`, {
-        method: "PATCH",
-      });
+      await apiClient(
+        `/notifications/${notificationId}/read`,
+        {
+          method: "PATCH",
+        },
+      );
 
       let wasUnread = false;
 
-      setNotifications((prev) =>
-        prev.map((item) => {
-          if (item._id === notificationId && !item.read) {
+      setNotifications((previous) =>
+        previous.map((item) => {
+          if (
+            item._id ===
+              notificationId &&
+            !item.read
+          ) {
             wasUnread = true;
-            return { ...item, read: true };
+
+            return {
+              ...item,
+              read: true,
+            };
           }
 
           return item;
-        })
+        }),
       );
 
       if (wasUnread) {
         decrementUnreadNotificationCount();
       }
     } catch (error) {
-      console.log(error);
+      console.log(
+        "mark notification read error:",
+        error,
+      );
+
       Alert.alert(
-        "Error",
-        error?.message || "Failed to mark as read"
+        "Unable to update alert",
+        error?.message ||
+          "Please try again.",
       );
     }
   };
 
-  const sectionedNotifications = useMemo(() => {
-    const grouped = {};
+  const handleNotificationPress =
+    async (item) => {
+      if (!item) return;
 
-    notifications.forEach((item) => {
-      const key = formatDateHeading(item.createdAt);
+      if (!item.read && item._id) {
+        await handleMarkAsRead(
+          item._id,
+        );
+      }
 
-      if (!grouped[key]) grouped[key] = [];
+      const screen =
+        item?.data?.screen ||
+        "notifications";
 
-      grouped[key].push(item);
-    });
-
-    const result = [];
-
-    Object.keys(grouped).forEach((dateKey) => {
-      result.push({
-        type: "header",
-        id: `header-${dateKey}`,
-        title: dateKey,
-      });
-
-      grouped[dateKey].forEach((item) => {
-        result.push({
-          type: "notification",
-          ...item,
+      if (
+        screen === "events" &&
+        item?.data?.eventId
+      ) {
+        router.push({
+          pathname:
+            "/(protected)/events/[id]",
+          params: {
+            id: String(
+              item.data.eventId,
+            ),
+            source:
+              "notification",
+          },
         });
+
+        return;
+      }
+
+      if (screen === "events") {
+        router.push(
+          "/(protected)/events",
+        );
+        return;
+      }
+
+      if (screen === "courses") {
+        router.push(
+          "/(protected)/courses",
+        );
+        return;
+      }
+
+      if (screen === "calendar") {
+        router.push(
+          "/(protected)/calendar",
+        );
+        return;
+      }
+
+      if (screen === "profile") {
+        router.push(
+          "/(protected)/profile",
+        );
+      }
+    };
+
+  const sectionedNotifications =
+    useMemo(() => {
+      const grouped = {};
+
+      notifications.forEach((item) => {
+        const key =
+          formatDateHeading(
+            item.createdAt,
+          );
+
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+
+        grouped[key].push(item);
       });
-    });
 
-    return result;
-  }, [notifications]);
+      const result = [];
 
-  const renderNotification = ({ item }) => {
+      Object.keys(grouped).forEach(
+        (dateKey) => {
+          result.push({
+            type: "header",
+            id: `header-${dateKey}`,
+            title: dateKey,
+          });
+
+          grouped[dateKey].forEach(
+            (item) => {
+              result.push({
+                type: "notification",
+                ...item,
+              });
+            },
+          );
+        },
+      );
+
+      return result;
+    }, [notifications]);
+
+  const renderNotification = ({
+    item,
+  }) => {
     if (item.type === "header") {
       return (
-        <Text className="mb-4 mt-2 text-[15px] font-semibold text-[#98A2B3]">
+        <Text
+          style={{
+            marginBottom: 12,
+            marginTop: 6,
+            color: "#98A2B3",
+            fontSize: type.small,
+            fontWeight: "800",
+          }}
+        >
           {item.title}
         </Text>
       );
     }
 
+    const eventImageUrl =
+      item?.data?.imageUrl ||
+      item?.data?.image ||
+      "";
+
+    const shouldShowEventImage =
+      item?.type === "event" &&
+      Boolean(eventImageUrl);
+
     return (
       <Pressable
-        onPress={() => {
-          if (!item.read) {
-            handleMarkAsRead(item._id);
-          }
+        onPress={() =>
+          handleNotificationPress(item)
+        }
+        style={{
+          marginBottom: 12,
+          borderRadius:
+            isCompactPhone ? 20 : 24,
+          backgroundColor: item.read
+            ? "#FFFFFF"
+            : "#EAF0F7",
+          padding: layout.cardPadding,
+          borderWidth: 1,
+          borderColor: item.read
+            ? "#EAECF0"
+            : "#CAD8E8",
         }}
-        className={`mb-4 rounded-[28px] p-5 ${
-          item.read ? "bg-white" : "bg-[#EEF4FF]"
-        }`}
       >
         <View className="flex-row">
-          <View
-            className={`mr-4 h-12 w-12 items-center justify-center rounded-2xl ${
-              item.read ? "bg-[#F2F4F7]" : "bg-[#0F5EFF]"
-            }`}
-          >
-            <Ionicons
-              name="notifications"
-              size={20}
-              color={item.read ? COLORS.textSecondary : COLORS.white}
+          {shouldShowEventImage ? (
+            <Image
+              source={{
+                uri: eventImageUrl,
+              }}
+              resizeMode="cover"
+              style={{
+                width:
+                  layout.notificationImageSize,
+                height:
+                  layout.notificationImageSize,
+                marginRight:
+                  isCompactPhone
+                    ? 12
+                    : 16,
+                borderRadius:
+                  isCompactPhone
+                    ? 14
+                    : 18,
+                backgroundColor:
+                  "#F2F4F7",
+              }}
             />
-          </View>
+          ) : (
+            <View
+              style={{
+                width: isCompactPhone
+                  ? 44
+                  : 50,
+                height: isCompactPhone
+                  ? 44
+                  : 50,
+                marginRight:
+                  isCompactPhone
+                    ? 12
+                    : 16,
+                alignItems: "center",
+                justifyContent:
+                  "center",
+                borderRadius: 16,
+                backgroundColor:
+                  item.read
+                    ? "#F2F4F7"
+                    : "#001B3D",
+              }}
+            >
+              <Ionicons
+                name={
+                  item.type === "event"
+                    ? "calendar-outline"
+                    : "notifications-outline"
+                }
+                size={
+                  isCompactPhone
+                    ? 19
+                    : 21
+                }
+                color={
+                  item.read
+                    ? "#667085"
+                    : "#FFFFFF"
+                }
+              />
+            </View>
+          )}
 
           <View className="flex-1">
-            <View className="flex-row items-start justify-between">
-              <Text className="mr-3 flex-1 text-[16px] font-semibold leading-6 text-[#101828]">
-                {item.title || "Notification"}
+            <View className="flex-row items-start">
+              <Text
+                numberOfLines={2}
+                style={{
+                  flex: 1,
+                  marginRight: 8,
+                  color: "#101828",
+                  fontSize:
+                    type.cardTitle,
+                  lineHeight:
+                    type.cardTitle + 7,
+                  fontWeight: "800",
+                }}
+              >
+                {item.title ||
+                  "Alert"}
               </Text>
 
-              <Text className="text-[12px] text-[#98A2B3]">
+              <Text
+                style={{
+                  color: "#98A2B3",
+                  fontSize:
+                    type.small,
+                }}
+              >
                 {item.createdAt
-                  ? new Date(item.createdAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })
+                  ? new Date(
+                      item.createdAt,
+                    ).toLocaleTimeString(
+                      [],
+                      {
+                        hour:
+                          "numeric",
+                        minute:
+                          "2-digit",
+                      },
+                    )
                   : ""}
               </Text>
             </View>
 
-            <Text className="mt-2 text-[14px] leading-6 text-[#667085]">
+            <Text
+              numberOfLines={
+                isCompactPhone ? 3 : 4
+              }
+              style={{
+                marginTop: 7,
+                color: "#667085",
+                fontSize: type.body,
+                lineHeight:
+                  type.body + 8,
+              }}
+            >
               {item.body}
             </Text>
 
-            {!item.read && (
-              <View className="mt-4 self-start rounded-full bg-white px-3 py-1">
-                <Text className="text-[11px] font-semibold text-[#0F5EFF]">
+            {item?.data?.screen ===
+            "events" ? (
+              <View className="mt-3 flex-row items-center">
+                <Text
+                  style={{
+                    color: "#001B3D",
+                    fontSize:
+                      type.small,
+                    fontWeight: "800",
+                  }}
+                >
+                  View event
+                </Text>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={15}
+                  color="#001B3D"
+                  style={{
+                    marginLeft: 3,
+                  }}
+                />
+              </View>
+            ) : null}
+
+            {!item.read ? (
+              <View className="mt-3 self-start rounded-full bg-white px-3 py-1">
+                <Text
+                  style={{
+                    color: "#001B3D",
+                    fontSize: 11,
+                    fontWeight: "800",
+                  }}
+                >
                   NEW
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
       </Pressable>
@@ -227,45 +564,74 @@ export default function NotificationsScreen() {
   };
 
   const renderHeader = () => (
-    <View className="mb-7">
-      <Text className="text-[32px] font-bold text-[#101828]">
-        Notifications
-      </Text>
-
-      <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
-        Stay updated with event reminders, registrations, and announcements.
-      </Text>
-    </View>
+    <ScreenHeader
+      title="Alerts"
+      subtitle="Important event updates, reminders, registration notices, and account announcements—all in one place."
+      style={{
+        marginBottom:
+          isCompactPhone ? 20 : 26,
+      }}
+    />
   );
 
   const renderEmpty = () => (
-    <View className="items-center justify-center px-10 py-24">
-      <Ionicons
-        name="notifications-off-outline"
-        size={48}
-        color={COLORS.icon}
-      />
+    <View className="items-center justify-center px-8 py-24">
+      <View className="h-16 w-16 items-center justify-center rounded-3xl bg-white">
+        <Ionicons
+          name="notifications-off-outline"
+          size={30}
+          color="#667085"
+        />
+      </View>
 
-      <Text className="mt-5 text-center text-[16px] font-semibold text-[#101828]">
-        No notifications yet
+      <Text
+        style={{
+          marginTop: 18,
+          textAlign: "center",
+          color: "#101828",
+          fontSize: type.cardTitle,
+          fontWeight: "800",
+        }}
+      >
+        No alerts yet
       </Text>
 
-      <Text className="mt-2 text-center text-[14px] leading-6 text-[#667085]">
-        We'll show event reminders, registrations, and announcements here.
+      <Text
+        style={{
+          marginTop: 8,
+          textAlign: "center",
+          color: "#667085",
+          fontSize: type.body,
+          lineHeight: type.body + 8,
+        }}
+      >
+        Event reminders and important
+        announcements will appear here.
       </Text>
     </View>
   );
 
   if (loading) {
     return (
-      <AppScreen centered scroll={false}>
-        <ActivityIndicator size="small" color={COLORS.primary} />
+      <AppScreen
+        centered
+        scroll={false}
+      >
+        <ActivityIndicator
+          size="small"
+          color={COLORS.primary}
+        />
       </AppScreen>
     );
   }
 
   return (
-    <AppScreen scroll={false}>
+    <AppScreen
+      scroll={false}
+      maxWidth={
+        layout.contentMaxWidth
+      }
+    >
       <FlatList
         data={sectionedNotifications}
         removeClippedSubviews
@@ -274,16 +640,22 @@ export default function NotificationsScreen() {
         windowSize={10}
         refreshing={refreshing}
         onRefresh={handleRefresh}
-        keyExtractor={(item) => item.id || item._id}
+        keyExtractor={(item) =>
+          String(
+            item.id || item._id,
+          )
+        }
         renderItem={renderNotification}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           flexGrow: 1,
-          paddingHorizontal: 20,
+          paddingHorizontal:
+            layout.horizontalPadding,
           paddingTop: 8,
-          paddingBottom: 140 + insets.bottom,
+          paddingBottom:
+            140 + insets.bottom,
         }}
       />
     </AppScreen>

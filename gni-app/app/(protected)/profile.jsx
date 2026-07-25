@@ -1,272 +1,452 @@
-import { useCallback, useState } from "react";
 import {
-  View,
-  Text,
   ActivityIndicator,
-  Pressable,
   Alert,
+  Pressable,
+  Text,
+  View,
 } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import {
+  useCallback,
+  useState,
+} from "react";
+import {
+  useFocusEffect,
+  useRouter,
+} from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
-
 import AppScreen from "@/components/common/AppScreen";
-
-import {
-  COLORS,
-} from "@/theme";
+import ScreenHeader from "@/components/ui/ScreenHeader";
+import { useResponsive } from "@/hooks/useResponsive";
+import { COLORS } from "@/theme";
 
 export default function ProfileScreen() {
-  const authUser = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const authUser = useAuthStore(
+    (state) => state.user,
+  );
+  const logout = useAuthStore(
+    (state) => state.logout,
+  );
+  const setAuth = useAuthStore(
+    (state) => state.setAuth,
+  );
+
   const router = useRouter();
 
-  const [user, setUser] = useState(authUser);
-  const [registeredEvents, setRegisteredEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    isCompactPhone,
+    type,
+    layout,
+  } = useResponsive();
 
-  const fetchProfileAndEvents = useCallback(async () => {
-    try {
-      if (!authUser?.id && !authUser?._id) {
+  const [user, setUser] =
+    useState(authUser);
+ 
+  const [loading, setLoading] =
+    useState(!authUser);
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const fetchProfile =
+  useCallback(
+    async (
+      showLoader = true,
+    ) => {
+      try {
+        if (
+          !authUser?.id &&
+          !authUser?._id
+        ) {
+          setLoading(false);
+          return;
+        }
+
+        const userId =
+          authUser?.id ||
+          authUser?._id;
+
+        if (
+          showLoader &&
+          !user
+        ) {
+          setLoading(true);
+        }
+
+        const profileResponse =
+          await apiClient(
+            `/profile/${userId}`,
+          );
+
+        const fetchedUser =
+          profileResponse?.user ||
+          null;
+
+        setUser(fetchedUser);
+
+        if (fetchedUser) {
+          setAuth({
+            user: {
+              ...fetchedUser,
+
+              id:
+                fetchedUser.id ||
+                fetchedUser._id,
+            },
+
+            token:
+              useAuthStore
+                .getState()
+                .token,
+          });
+        }
+      } catch (error) {
+        console.log(
+          "fetchProfile error:",
+          error,
+        );
+
+        Alert.alert(
+          "Unable to load profile",
+
+          error?.message ||
+            "Please try again.",
+        );
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const userId = authUser?.id || authUser?._id;
-
-      setLoading(true);
-
-      const [profileRes, eventsRes] = await Promise.all([
-        apiClient(`/profile/${userId}`),
-        apiClient(`/events/registered/${userId}`),
-      ]);
-
-      const fetchedUser = profileRes?.user || null;
-      const fetchedEvents = eventsRes?.events || [];
-
-      setUser(fetchedUser);
-      setRegisteredEvents(fetchedEvents);
-
-      if (fetchedUser) {
-        setAuth({
-          user: {
-            ...fetchedUser,
-            id: fetchedUser.id || fetchedUser._id,
-          },
-          token: useAuthStore.getState().token,
-        });
-      }
-    } catch (error) {
-      console.log("fetchProfileAndEvents error:", error);
-      Alert.alert("Error", error?.message || "Failed to load profile");
-    } finally {
-      setLoading(false);
-    }
-  }, [authUser?.id, authUser?._id]);
+    },
+    [
+      authUser?.id,
+      authUser?._id,
+      setAuth,
+      user,
+    ],
+  );
 
   useFocusEffect(
     useCallback(() => {
-      fetchProfileAndEvents();
-    }, [fetchProfileAndEvents])
+      fetchProfile(true);
+    }, [fetchProfile]),
   );
 
-  const handleOpenEvent = (event) => {
-    if (!event?._id) return;
-
-    router.push({
-      pathname: "/(protected)/events/[id]",
-      params: {
-        id: event._id,
-        source: "profile",
-      },
-    });
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await fetchProfile(false);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const handleLogout = () => {
-    logout();
-    router.replace("/auth/login");
+ 
+
+  const handleLogout = async () => {
+    await logout();
+
+    router.replace(
+      "/auth/login",
+    );
   };
 
-if (loading) {
-  return (
-    <AppScreen centered scroll={false}>
-      <ActivityIndicator size="small" color={COLORS.primary} />
-    </AppScreen>
-  );
-}
+  if (loading && !user) {
+    return (
+      <AppScreen
+        centered
+        scroll={false}
+      >
+        <ActivityIndicator
+          size="small"
+          color={COLORS.primary}
+        />
+      </AppScreen>
+    );
+  }
 
-if (!user) {
-  return (
-    <AppScreen centered scroll={false}>
-      <Text className="text-center text-[16px] text-[#667085]">
-        No user data found
-      </Text>
-    </AppScreen>
-  );
-}
+  if (!user) {
+    return (
+      <AppScreen
+        centered
+        scroll={false}
+      >
+        <Text
+          style={{
+            textAlign: "center",
+            color: "#667085",
+            fontSize: type.body,
+          }}
+        >
+          No user data found
+        </Text>
+      </AppScreen>
+    );
+  }
 
   const initials = user?.name
     ? user.name
-        .split(" ")
+        .split(/\s+/)
+        .filter(Boolean)
         .map((word) => word[0])
         .join("")
         .slice(0, 2)
         .toUpperCase()
     : "U";
 
-return (
-<AppScreen
-  bottomSpace={140}
-  contentStyle={{
-    paddingTop: 8,
-  }}
->
-      <View className="mb-7">
-        <Text className="text-[32px] font-bold text-[#101828]">Profile</Text>
-        <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
-          Manage your account and registered events.
-        </Text>
-      </View>
+  return (
+    <AppScreen
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
+      maxWidth={
+        layout.contentMaxWidth
+      }
+      bottomSpace={30}
+      contentStyle={{
+        paddingHorizontal:
+          layout.horizontalPadding,
+        paddingTop: 8,
+      }}
+    >
+      <ScreenHeader
+        title="Profile"
+        subtitle="Review your account and personal information."
+      />
 
-      <View className="mb-6 rounded-[30px] bg-[#0F5EFF] p-6">
+      <View
+        style={{
+          marginBottom:
+            isCompactPhone ? 18 : 24,
+          borderRadius:
+            isCompactPhone ? 22 : 28,
+          backgroundColor: "#001B3D",
+          padding: layout.cardPadding,
+        }}
+      >
         <View className="flex-row items-center">
-          <View className="mr-5 h-20 w-20 items-center justify-center rounded-[28px] bg-white">
-            <Text className="text-[26px] font-bold text-[#0F5EFF]">
+          <View
+            style={{
+              width:
+                isCompactPhone ? 64 : 78,
+              height:
+                isCompactPhone ? 64 : 78,
+              marginRight:
+                isCompactPhone ? 14 : 18,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius:
+                isCompactPhone ? 20 : 24,
+              backgroundColor: "#FFFFFF",
+            }}
+          >
+            <Text
+              style={{
+                color: "#001B3D",
+                fontSize:
+                  isCompactPhone
+                    ? 22
+                    : 26,
+                fontWeight: "800",
+              }}
+            >
               {initials}
             </Text>
           </View>
 
           <View className="flex-1">
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            className="text-[22px] font-bold text-white"
-          >
-            {user.name || "User"}
-          </Text>
-          <Text
-            numberOfLines={1}
-            className="mt-2 text-[14px] text-blue-100"
-          >
-            {user.email || "No email"}
-          </Text>
+            <Text
+              numberOfLines={2}
+              style={{
+                color: "#FFFFFF",
+                fontSize:
+                  isCompactPhone
+                    ? type.cardTitle + 3
+                    : type.cardTitle + 5,
+                lineHeight:
+                  isCompactPhone
+                    ? type.cardTitle + 10
+                    : type.cardTitle + 12,
+                fontWeight: "800",
+              }}
+            >
+              {user.name || "User"}
+            </Text>
+
+            <Text
+              numberOfLines={2}
+              style={{
+                marginTop: 6,
+                color: "#C7D5E5",
+                fontSize: type.small,
+                lineHeight:
+                  type.small + 6,
+              }}
+            >
+              {user.email ||
+                "No email available"}
+            </Text>
           </View>
         </View>
       </View>
 
-      <View className="mb-6 flex-row gap-4">
-        <InfoBox title="Status" value="Active" />
-        <InfoBox title="Role" value={user.type || "User"} />
+      <View className="mb-6 flex-row">
+        <InfoBox
+          title="Status"
+          value="Active"
+          type={type}
+          compact={isCompactPhone}
+        />
+
+        <View
+          style={{
+            width:
+              isCompactPhone ? 10 : 14,
+          }}
+        />
+
+        <InfoBox
+          title="Role"
+          value={
+            user.type || "User"
+          }
+          type={type}
+          compact={isCompactPhone}
+        />
       </View>
 
-      <View className="mb-6 rounded-[28px] bg-white p-5">
-        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
+      <View
+        style={{
+          marginBottom: 24,
+          borderRadius:
+            isCompactPhone ? 22 : 26,
+          backgroundColor: "#FFFFFF",
+          padding: layout.cardPadding,
+          borderWidth: 1,
+          borderColor: "#EAECF0",
+        }}
+      >
+        <Text
+          style={{
+            marginBottom: 18,
+            color: "#101828",
+            fontSize:
+              type.sectionTitle,
+            fontWeight: "800",
+          }}
+        >
           Personal Details
         </Text>
 
-        <ProfileItem icon="person-outline" label="Name" value={user.name} />
+        <ProfileItem
+          icon="person-outline"
+          label="Name"
+          value={user.name}
+          type={type}
+        />
         <Divider />
-        <ProfileItem icon="mail-outline" label="Email" value={user.email} />
+        <ProfileItem
+          icon="mail-outline"
+          label="Email"
+          value={user.email}
+          type={type}
+        />
         <Divider />
-        <ProfileItem icon="call-outline" label="Phone" value={user.phone} />
+        <ProfileItem
+          icon="call-outline"
+          label="Phone"
+          value={
+            user.phone ||
+            user.mobile
+          }
+          type={type}
+        />
         <Divider />
         <ProfileItem
           icon="school-outline"
           label="College"
           value={user.college}
+          type={type}
         />
         <Divider />
-        <ProfileItem icon="book-outline" label="Branch" value={user.branch} />
+        <ProfileItem
+          icon="book-outline"
+          label="Branch"
+          value={user.branch}
+          type={type}
+        />
       </View>
 
-      <View className="mb-6">
-        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
-          Registered Events
-        </Text>
-
-        {registeredEvents.length === 0 ? (
-          <View className="rounded-[28px] bg-white p-6">
-            <Text className="text-[14px] text-[#667085]">
-              No registered events yet
-            </Text>
-          </View>
-        ) : (
-          registeredEvents.map((event) => (
-            <Pressable
-              key={event._id}
-              onPress={() => handleOpenEvent(event)}
-              className="mb-4 rounded-[28px] bg-white p-5"
-            >
-              <View className="flex-row items-start">
-                <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
-                  <Ionicons
-                    name="calendar-outline"
-                    size={20}
-                    color="#0F5EFF"
-                  />
-                </View>
-
-                <View className="flex-1">
-                  <Text className="text-[16px] font-semibold text-[#101828]">
-                    {event.title || "Untitled Event"}
-                  </Text>
-
-                  <Text className="mt-2 text-[14px] text-[#667085]">
-                    {event.date
-                      ? new Date(event.date).toLocaleDateString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })
-                      : "-"}
-                  </Text>
-
-                  <Text className="mt-1 text-[14px] text-[#667085]">
-                    {event.location || "Online"}
-                  </Text>
-
-                  <Text className="mt-3 text-[12px] font-semibold text-[#0F5EFF]">
-                    View details
-                  </Text>
-                </View>
-
-                <Ionicons name="chevron-forward" size={18} color="#98A2B3" />
-              </View>
-            </Pressable>
-          ))
-        )}
-      </View>
+      
 
       <Pressable
         onPress={handleLogout}
-        className="rounded-[24px] bg-[#FEF3F2] px-5 py-4"
+        style={{
+          minHeight: 52,
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "row",
+          borderRadius: 18,
+          backgroundColor: "#FEF3F2",
+          paddingHorizontal: 18,
+        }}
       >
-        <View className="flex-row items-center justify-center">
-          <Ionicons name="log-out-outline" size={20} color="#B42318" />
-          <Text className="ml-2 text-[15px] font-semibold text-[#B42318]">
-            Logout
-          </Text>
-        </View>
+        <Ionicons
+          name="log-out-outline"
+          size={20}
+          color="#B42318"
+        />
+
+        <Text
+          style={{
+            marginLeft: 8,
+            color: "#B42318",
+            fontSize: type.button,
+            fontWeight: "800",
+          }}
+        >
+          Logout
+        </Text>
       </Pressable>
-</AppScreen>
+    </AppScreen>
   );
 }
 
-function ProfileItem({ icon, label, value }) {
+function ProfileItem({
+  icon,
+  label,
+  value,
+  type,
+}) {
   return (
     <View className="flex-row items-center">
-      <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
-        <Ionicons name={icon} size={20} color="#0F5EFF" />
+      <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF0F7]">
+        <Ionicons
+          name={icon}
+          size={21}
+          color="#001B3D"
+        />
       </View>
 
       <View className="flex-1">
-        <Text className="text-[12px] font-medium text-[#98A2B3]">
+        <Text
+          style={{
+            color: "#98A2B3",
+            fontSize: type.small,
+            fontWeight: "600",
+          }}
+        >
           {label}
         </Text>
-        <Text className="mt-1 text-[15px] font-semibold text-[#101828]">
+
+        <Text
+          style={{
+            marginTop: 4,
+            color: "#101828",
+            fontSize: type.body,
+            lineHeight:
+              type.body + 7,
+            fontWeight: "700",
+          }}
+        >
           {value || "-"}
         </Text>
       </View>
@@ -275,14 +455,54 @@ function ProfileItem({ icon, label, value }) {
 }
 
 function Divider() {
-  return <View className="my-5 h-px bg-[#EAECF0]" />;
+  return (
+    <View className="my-5 h-px bg-[#EAECF0]" />
+  );
 }
 
-function InfoBox({ title, value }) {
+function InfoBox({
+  title,
+  value,
+  type,
+  compact,
+}) {
   return (
-    <View className="flex-1 rounded-[24px] bg-white p-5">
-      <Text className="text-[13px] text-[#667085]">{title}</Text>
-      <Text className="mt-3 text-[15px] font-bold text-[#101828]">
+    <View
+      style={{
+        flex: 1,
+        minHeight: compact
+          ? 92
+          : 104,
+        justifyContent: "center",
+        borderRadius:
+          compact ? 20 : 24,
+        backgroundColor: "#FFFFFF",
+        padding: compact ? 15 : 18,
+        borderWidth: 1,
+        borderColor: "#EAECF0",
+      }}
+    >
+      <Text
+        style={{
+          color: "#667085",
+          fontSize: type.small,
+          fontWeight: "600",
+        }}
+      >
+        {title}
+      </Text>
+
+      <Text
+        numberOfLines={2}
+        style={{
+          marginTop: 8,
+          color: "#101828",
+          fontSize: type.body,
+          lineHeight:
+            type.body + 7,
+          fontWeight: "800",
+        }}
+      >
         {value}
       </Text>
     </View>

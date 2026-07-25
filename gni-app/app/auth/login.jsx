@@ -5,6 +5,7 @@ import {
   Pressable,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 
@@ -14,12 +15,10 @@ import { useAuthStore } from "../../src/stores/authStore";
 import {
   COLORS,
   SPACING,
-  TYPOGRAPHY,
   RADIUS,
 } from "../../src/theme";
 
 import AppScreen from "../../src/components/common/AppScreen";
-import AppButton from "../../src/components/ui/AppButton";
 import AppInput from "../../src/components/ui/AppInput";
 
 export default function LoginScreen() {
@@ -79,79 +78,186 @@ export default function LoginScreen() {
   };
 
   return (
-    <AppScreen centered>
-      <View>
-        <View
-          style={{
-            marginBottom: SPACING.xxxl + 8,
-            alignItems: "center",
-          }}
-        >
-          <Image
-            source={{
-              uri: "https://res.cloudinary.com/dwqwtolrt/image/upload/c_limit,w_800,q_75,f_auto/v1760073633/logo_wvim3n.png",
-            }}
-            style={{
-              width: 240,
-              height: 90,
-            }}
-            resizeMode="contain"
-          />
-        </View>
+  <AppScreen
+    centered
+    contentStyle={{ paddingTop: SPACING.xl }}
+    maxWidth={560}
+  >
+    {/* Logo */}
+    <View
+      style={{
+        alignItems: "center",
+        marginBottom: SPACING.xxxl,
+      }}
+    >
+      <Image
+        source={{
+          uri: "https://gyannidhi-website-assets.sfo3.cdn.digitaloceanspaces.com/images/logo_wvim3n.png",
+        }}
+        style={{
+          width: 190,
+          height: 65,
+        }}
+        resizeMode="contain"
+      />
+    </View>
 
-        <View
-          style={{
-            backgroundColor: COLORS.surface,
-            borderRadius: RADIUS.xxl,
-            padding: SPACING.xxl,
-          }}
-        >
-          <AppInput
-            label="Email Address"
-            icon="mail-outline"
-            placeholder="Enter email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            returnKeyType="next"
-            blurOnSubmit={false}
-          />
+   
 
-          <AppInput
-            label="Password"
-            icon="lock-closed-outline"
-            placeholder="Enter password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            returnKeyType="done"
-            onSubmitEditing={handleLogin}
-            rightText={showPassword ? "Hide" : "Show"}
-            onRightPress={() => setShowPassword(!showPassword)}
-            style={{ marginBottom: SPACING.xxl }}
-          />
+    {/* Login form */}
+    <View
+      style={{
+        paddingVertical: SPACING.lg,
+        borderRadius: RADIUS.xl,
+        backgroundColor: COLORS.surface,
+      }}
+    >
+      <AppInput
+        label="Email Address"
+        icon="mail-outline"
+        placeholder="Enter your email"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        returnKeyType="next"
+        blurOnSubmit={false}
+      />
 
-          <AppButton
-            title="Login"
-            loading={loading}
-            onPress={handleLogin}
-          />
-        </View>
+      <AppInput
+        label="Password"
+        icon="lock-closed-outline"
+        placeholder="Enter your password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry={!showPassword}
+        returnKeyType="done"
+        onSubmitEditing={handleLogin}
+        rightText={showPassword ? "Hide" : "Show"}
+        onRightPress={() => setShowPassword((previous) => !previous)}
+        style={{
+          marginBottom: 0,
+        }}
+      />
+    </View>
 
-        <Pressable onPress={() => router.push("/auth/signup")}>
-          <Text
-            style={{
-              marginTop: SPACING.xxxl,
-              textAlign: "center",
-              fontSize: TYPOGRAPHY.small,
-              fontWeight: "600",
-              color: COLORS.primary,
-            }}
-          >
-            Don't have an account? Sign up
-          </Text>
-        </Pressable>
-      </View>
-    </AppScreen>
-  );
+    {/* Sign-in button */}
+<View
+  style={{
+    width: "100%",
+    marginTop: SPACING.xl,
+  }}
+>
+  <View
+    style={{
+      width: "100%",
+      height: 50,
+      backgroundColor: "#022670",
+      borderRadius: 14,
+      overflow: "hidden",
+    }}
+  >
+    <Pressable
+      disabled={loading}
+      onPress={handleLogin}
+      style={({ pressed }) => ({
+        width: "100%",
+        height: "100%",
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: pressed && !loading ? 0.85 : 1,
+      })}
+    >
+      {loading ? (
+  <View
+    style={{
+      width: "100%",
+      height: 50,
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <ActivityIndicator size="small" color="#FFFFFF" />
+  </View>
+) : (
+  <Text
+    style={{
+      width: "100%",
+      height: 50,
+      lineHeight: 50,
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "700",
+      textAlign: "center",
+      textAlignVertical: "center",
+      includeFontPadding: false,
+    }}
+  >
+    Sign in
+  </Text>
+)}
+    </Pressable>
+  </View>
+</View>
+
+{/* Vertical space between Sign in and Forgot password */}
+<View style={{ height: 16 }} />
+
+<Pressable
+  disabled={loading}
+  onPress={() => router.push("/auth/forgot-password")}
+  style={({ pressed }) => ({
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    opacity: pressed ? 0.65 : 1,
+  })}
+>
+  <Text
+    style={{
+      color: "#0F5EFF",
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: "600",
+      textAlign: "center",
+    }}
+  >
+    Forgot password?
+  </Text>
+</Pressable>
+
+{/* Vertical space between Forgot password and Signup */}
+<View style={{ height: 18 }} />
+
+<Pressable
+  disabled={loading}
+  onPress={() => router.push("/auth/signup")}
+  style={({ pressed }) => ({
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    opacity: pressed ? 0.65 : 1,
+  })}
+>
+  <Text
+    style={{
+      color: "#667085",
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: "center",
+    }}
+  >
+    Don&apos;t have an account?{" "}
+    <Text
+      style={{
+        color: "#0F5EFF",
+        fontWeight: "700",
+      }}
+    >
+      Sign up
+    </Text>
+  </Text>
+</Pressable>
+  </AppScreen>
+);
 }

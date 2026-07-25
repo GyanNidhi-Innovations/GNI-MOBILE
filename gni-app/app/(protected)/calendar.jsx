@@ -1,45 +1,86 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  View,
   ActivityIndicator,
   Alert,
-  Text,
   Pressable,
+  Text,
+  View,
 } from "react-native";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { router } from "expo-router";
 import { Calendar } from "react-native-calendars";
 import { Ionicons } from "@expo/vector-icons";
 
 import { apiClient } from "@/services/apiClient";
-
 import AppScreen from "@/components/common/AppScreen";
-
-
-import {
-  COLORS,
-} from "@/theme";
+import ScreenHeader from "@/components/ui/ScreenHeader";
+import { useResponsive } from "@/hooks/useResponsive";
+import { COLORS } from "@/theme";
 
 export default function CalendarScreen() {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(null);
-  
+  const [events, setEvents] =
+    useState([]);
+  const [loading, setLoading] =
+    useState(true);
+  const [refreshing, setRefreshing] =
+    useState(false);
+  const [selectedDate, setSelectedDate] =
+    useState(null);
 
-  useEffect(() => {
-    const fetchCalendarEvents = async () => {
-      try {
-        const res = await apiClient("/events/calendar/all");
-        setEvents(res?.events || []);
-      } catch (error) {
-        console.log("calendar fetch error:", error);
-        Alert.alert("Error", "Failed to load calendar");
-      } finally {
+  const {
+    isCompactPhone,
+    type,
+    layout,
+  } = useResponsive();
+
+  const fetchCalendarEvents = async (
+    showLoader = true,
+  ) => {
+    try {
+      if (showLoader) {
+        setLoading(true);
+      }
+
+      const response = await apiClient(
+        "/events/calendar/all",
+      );
+
+      setEvents(
+        response?.events || [],
+      );
+    } catch (error) {
+      console.log(
+        "calendar fetch error:",
+        error,
+      );
+
+      Alert.alert(
+        "Unable to load calendar",
+        error?.message ||
+          "Please try again.",
+      );
+    } finally {
+      if (showLoader) {
         setLoading(false);
       }
-    };
+    }
+  };
 
-    fetchCalendarEvents();
+  useEffect(() => {
+    fetchCalendarEvents(true);
   }, []);
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await fetchCalendarEvents(false);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const eventsByDate = useMemo(() => {
     const map = {};
@@ -47,9 +88,23 @@ export default function CalendarScreen() {
     events.forEach((event) => {
       if (!event?.date) return;
 
-      const dateKey = new Date(event.date).toISOString().split("T")[0];
+      const date = new Date(
+        event.date,
+      );
 
-      if (!map[dateKey]) map[dateKey] = [];
+      if (
+        Number.isNaN(date.getTime())
+      ) {
+        return;
+      }
+
+      const dateKey = date
+        .toISOString()
+        .split("T")[0];
+
+      if (!map[dateKey]) {
+        map[dateKey] = [];
+      }
 
       map[dateKey].push(event);
     });
@@ -60,180 +115,372 @@ export default function CalendarScreen() {
   const markedDates = useMemo(() => {
     const marks = {};
 
-    Object.keys(eventsByDate).forEach((dateKey) => {
-      marks[dateKey] = {
-        marked: true,
-        dotColor: COLORS.primary,
-      };
-    });
+    Object.keys(eventsByDate).forEach(
+      (dateKey) => {
+        marks[dateKey] = {
+          marked: true,
+          dotColor: "#001B3D",
+        };
+      },
+    );
 
     if (selectedDate) {
       marks[selectedDate] = {
         ...(marks[selectedDate] || {}),
         selected: true,
-        selectedColor: COLORS.primary,
-        selectedTextColor: COLORS.white,
+        selectedColor: "#001B3D",
+        selectedTextColor: "#FFFFFF",
       };
     }
 
     return marks;
   }, [eventsByDate, selectedDate]);
 
-  const selectedEvents = selectedDate ? eventsByDate[selectedDate] || [] : [];
+  const selectedEvents = selectedDate
+    ? eventsByDate[selectedDate] || []
+    : [];
+
+  const readableSelectedDate =
+    selectedDate
+      ? new Date(
+          `${selectedDate}T00:00:00`,
+        ).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })
+      : null;
 
   const handleOpenEvent = (event) => {
     if (!event?._id) {
-      Alert.alert("Error", "This event does not have a valid id");
+      Alert.alert(
+        "Unable to open event",
+        "This event does not have a valid ID.",
+      );
       return;
     }
 
     router.push({
-      pathname: "/(protected)/events/[id]",
+      pathname:
+        "/(protected)/events/[id]",
       params: {
-        id: event._id,
+        id: String(event._id),
         source: "calendar",
       },
     });
   };
 
-  const readableSelectedDate = selectedDate
-    ? new Date(selectedDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      })
-    : null;
-if (loading) {
+  if (loading) {
+    return (
+      <AppScreen
+        centered
+        scroll={false}
+      >
+        <ActivityIndicator
+          size="small"
+          color={COLORS.primary}
+        />
+      </AppScreen>
+    );
+  }
+
   return (
-    <AppScreen centered scroll={false}>
-      <ActivityIndicator
-        size="small"
-        color={COLORS.primary}
+    <AppScreen
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
+      maxWidth={
+        layout.contentMaxWidth
+      }
+      bottomSpace={60}
+      contentStyle={{
+        paddingHorizontal:
+          layout.horizontalPadding,
+        paddingTop: 8,
+      }}
+    >
+      <ScreenHeader
+        title="Calendar"
+        subtitle="Choose a highlighted date to view scheduled workshops, webinars, drives, and industry events."
       />
-    </AppScreen>
-  );
-}
 
-  return (
-<AppScreen
-  bottomSpace={140}
-  contentStyle={{
-    paddingTop: 8,
-  }}
->
-      <View className="mb-7">
-        <Text className="text-[30px] font-bold text-[#101828]">Calendar</Text>
-
-        <Text className="mt-2 text-[15px] leading-6 text-[#667085]">
-          Track upcoming events and open details directly from selected dates.
-        </Text>
-      </View>
-
-      <View className="overflow-hidden rounded-[30px] bg-white p-3">
+      <View
+        style={{
+          overflow: "hidden",
+          borderRadius:
+            isCompactPhone ? 22 : 28,
+          backgroundColor: "#FFFFFF",
+          padding:
+            isCompactPhone ? 6 : 10,
+          borderWidth: 1,
+          borderColor: "#EAECF0",
+        }}
+      >
         <Calendar
           markedDates={markedDates}
-          onDayPress={(day) => setSelectedDate(day.dateString)}
+          onDayPress={(day) =>
+            setSelectedDate(
+              day.dateString,
+            )
+          }
           renderHeader={(date) => {
-            const monthOnly = new Date(date).toLocaleDateString(undefined, {
-              month: "long",
-              year: "numeric",
-            });
+            const monthOnly =
+              new Date(
+                date,
+              ).toLocaleDateString(
+                undefined,
+                {
+                  month: "long",
+                  year: "numeric",
+                },
+              );
 
             return (
-              <Text className="py-4 text-[20px] font-bold text-[#101828]">
+              <Text
+                style={{
+                  paddingVertical:
+                    isCompactPhone
+                      ? 12
+                      : 16,
+                  color: "#101828",
+                  fontSize:
+                    type.sectionTitle,
+                  fontWeight: "800",
+                }}
+              >
                 {monthOnly}
               </Text>
             );
           }}
           theme={{
-  backgroundColor: COLORS.surface,
-  calendarBackground: COLORS.surface,
-  textSectionTitleColor: COLORS.icon,
-
-  selectedDayBackgroundColor: COLORS.primary,
-  selectedDayTextColor: COLORS.white,
-
-  todayTextColor: COLORS.primary,
-  dayTextColor: COLORS.text,
-  textDisabledColor: COLORS.border,
-
-  monthTextColor: COLORS.text,
-  arrowColor: COLORS.primary,
-
-  textMonthFontWeight: "700",
-  textDayFontWeight: "500",
-  textDayHeaderFontWeight: "700",
-  textDayFontSize: 15,
-  textDayHeaderFontSize: 12,
-}}
+            backgroundColor:
+              "#FFFFFF",
+            calendarBackground:
+              "#FFFFFF",
+            textSectionTitleColor:
+              "#667085",
+            selectedDayBackgroundColor:
+              "#001B3D",
+            selectedDayTextColor:
+              "#FFFFFF",
+            todayTextColor:
+              "#001B3D",
+            dayTextColor:
+              "#101828",
+            textDisabledColor:
+              "#D0D5DD",
+            monthTextColor:
+              "#101828",
+            arrowColor:
+              "#001B3D",
+            textMonthFontWeight:
+              "800",
+            textDayFontWeight:
+              "600",
+            textDayHeaderFontWeight:
+              "700",
+            textDayFontSize:
+              isCompactPhone
+                ? 13
+                : 15,
+            textDayHeaderFontSize:
+              isCompactPhone
+                ? 11
+                : 12,
+          }}
         />
       </View>
 
-      <View className="mt-6">
-        <Text className="mb-5 text-[20px] font-bold text-[#101828]">
-          {selectedDate ? readableSelectedDate : "Selected Events"}
+      <View
+        style={{
+          marginTop:
+            isCompactPhone ? 22 : 28,
+        }}
+      >
+        <Text
+          style={{
+            marginBottom: 16,
+            color: "#101828",
+            fontSize:
+              type.sectionTitle,
+            fontWeight: "800",
+          }}
+        >
+          {selectedDate
+            ? readableSelectedDate
+            : "Events by date"}
         </Text>
 
         {!selectedDate ? (
-          <View className="rounded-[28px] bg-white p-6">
-            <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
-              <Ionicons name="calendar-outline" size={22} color="#0F5EFF" />
-            </View>
-
-            <Text className="text-[16px] font-semibold text-[#101828]">
-              Pick a highlighted date
-            </Text>
-
-            <Text className="mt-2 text-[14px] leading-6 text-[#667085]">
-              Dates with a blue dot have scheduled events.
-            </Text>
-          </View>
-        ) : selectedEvents.length === 0 ? (
-          <View className="rounded-[28px] bg-white p-6">
-            <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#F2F4F7]">
-              <Ionicons name="calendar-clear-outline" size={22} color="#667085" />
-            </View>
-
-            <Text className="text-[16px] font-semibold text-[#101828]">
-              No events scheduled
-            </Text>
-
-            <Text className="mt-2 text-[14px] leading-6 text-[#667085]">
-              There are no events for this date.
-            </Text>
-          </View>
+          <CalendarStateCard
+            icon="calendar-outline"
+            title="Pick a highlighted date"
+            body="Dates with a dark blue dot have scheduled events."
+            type={type}
+            layout={layout}
+          />
+        ) : selectedEvents.length ===
+          0 ? (
+          <CalendarStateCard
+            icon="calendar-clear-outline"
+            title="No events scheduled"
+            body="There are no events for this date."
+            type={type}
+            layout={layout}
+            muted
+          />
         ) : (
-          selectedEvents.map((event) => (
-            <Pressable
-              key={event._id}
-              onPress={() => handleOpenEvent(event)}
-              className="mb-4 rounded-[28px] bg-white p-5"
-            >
-              <View className="flex-row items-start">
-                <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF]">
-                  <Ionicons name="calendar-outline" size={20} color="#0F5EFF" />
+          selectedEvents.map(
+            (event) => (
+              <Pressable
+                key={String(event._id)}
+                onPress={() =>
+                  handleOpenEvent(event)
+                }
+                style={{
+                  marginBottom: 12,
+                  flexDirection: "row",
+                  alignItems:
+                    "flex-start",
+                  borderRadius:
+                    isCompactPhone
+                      ? 20
+                      : 24,
+                  backgroundColor:
+                    "#FFFFFF",
+                  padding:
+                    layout.cardPadding,
+                  borderWidth: 1,
+                  borderColor:
+                    "#EAECF0",
+                }}
+              >
+                <View className="mr-4 h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF0F7]">
+                  <Ionicons
+                    name="calendar-outline"
+                    size={21}
+                    color="#001B3D"
+                  />
                 </View>
 
                 <View className="flex-1">
-                  <Text className="text-[16px] font-semibold text-[#101828]">
-                    {event.title || "Untitled Event"}
+                  <Text
+                    style={{
+                      color: "#101828",
+                      fontSize:
+                        type.cardTitle,
+                      lineHeight:
+                        type.cardTitle +
+                        7,
+                      fontWeight: "800",
+                    }}
+                  >
+                    {event.title ||
+                      "Untitled Event"}
                   </Text>
 
-                  <Text className="mt-2 text-[14px] text-[#667085]">
-                    {event.location || "Online"}
+                  <Text
+                    style={{
+                      marginTop: 7,
+                      color: "#667085",
+                      fontSize:
+                        type.body,
+                      lineHeight:
+                        type.body + 7,
+                    }}
+                  >
+                    {event.location ||
+                      "Online"}
                   </Text>
 
-                  <Text className="mt-3 text-[12px] font-semibold text-[#0F5EFF]">
+                  <Text
+                    style={{
+                      marginTop: 10,
+                      color: "#001B3D",
+                      fontSize:
+                        type.small,
+                      fontWeight: "800",
+                    }}
+                  >
                     View details
                   </Text>
                 </View>
 
-                <Ionicons name="chevron-forward" size={18} color="#98A2B3" />
-              </View>
-            </Pressable>
-          ))
+                <Ionicons
+                  name="chevron-forward"
+                  size={19}
+                  color="#98A2B3"
+                />
+              </Pressable>
+            ),
+          )
         )}
       </View>
     </AppScreen>
+  );
+}
+
+function CalendarStateCard({
+  icon,
+  title,
+  body,
+  type,
+  layout,
+  muted = false,
+}) {
+  return (
+    <View
+      style={{
+        borderRadius: 24,
+        backgroundColor: "#FFFFFF",
+        padding: layout.cardPadding,
+        borderWidth: 1,
+        borderColor: "#EAECF0",
+      }}
+    >
+      <View
+        style={{
+          width: 50,
+          height: 50,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 16,
+          backgroundColor: muted
+            ? "#F2F4F7"
+            : "#EAF0F7",
+        }}
+      >
+        <Ionicons
+          name={icon}
+          size={23}
+          color={
+            muted
+              ? "#667085"
+              : "#001B3D"
+          }
+        />
+      </View>
+
+      <Text
+        style={{
+          marginTop: 14,
+          color: "#101828",
+          fontSize: type.cardTitle,
+          fontWeight: "800",
+        }}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={{
+          marginTop: 7,
+          color: "#667085",
+          fontSize: type.body,
+          lineHeight: type.body + 8,
+        }}
+      >
+        {body}
+      </Text>
+    </View>
   );
 }

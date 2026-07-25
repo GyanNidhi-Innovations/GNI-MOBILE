@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef,useCallback } from "react";
 import { Tabs, useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "@/stores/authStore";
 import {
   registerForFcmNotifications,
+  subscribeToPushTokenChanges,
   getUnreadNotificationCount,
 } from "@/services/notificationService";
 
@@ -18,7 +19,7 @@ export default function ProtectedLayout() {
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const hasRegistered = useRef(false);
+  // const hasRegistered = useRef(false);
   const safeBottom = Math.max(insets.bottom, 12);
   const tabBarHeight = 68 + safeBottom;
 
@@ -30,60 +31,168 @@ export default function ProtectedLayout() {
     (state) => state.setUnreadNotificationCount
   );
 
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      try {
-        if (!userId) return;
-
-        const res = await getUnreadNotificationCount(userId);
-        setUnreadNotificationCount(res?.count || 0);
-      } catch (error) {
-        console.log("fetchUnreadCount error:", error);
+  const refreshUnreadCount =
+  useCallback(async () => {
+    try {
+      if (!userId) {
+        setUnreadNotificationCount(0);
+        return;
       }
-    };
 
-    fetchUnreadCount();
-  }, [userId, setUnreadNotificationCount]);
+      const response =
+        await getUnreadNotificationCount(
+          userId,
+        );
+
+      setUnreadNotificationCount(
+        response?.count || 0,
+      );
+    } catch (error) {
+      console.log(
+        "refreshUnreadCount error:",
+        error?.message || error,
+      );
+    }
+  }, [
+    userId,
+    setUnreadNotificationCount,
+  ]);
+
+ useEffect(() => {
+  refreshUnreadCount();
+}, [refreshUnreadCount]);
 
   useEffect(() => {
-    if (!userId || hasRegistered.current) return;
+  if (!userId) return undefined;
 
-    hasRegistered.current = true;
+ console.log(
+  "[PUSH-DEBUG][LAYOUT] Notification effect running",
+  {
+    userId,
+    hasUserId: Boolean(userId),
+  },
+);
 
-    registerForFcmNotifications(userId).catch((error) => {
-      console.log("FCM setup failed:", error?.message || error);
-    });
+registerForFcmNotifications(userId)
+  .then((result) => {
+    console.log(
+      "[PUSH-DEBUG][LAYOUT] Registration successful",
+      {
+        userId,
+        installationId:
+          result?.installationId,
+        tokenLast10:
+          result?.nativeToken?.slice(-10),
+        backendSuccess:
+          result?.response?.success,
+        backendIsActive:
+          result?.response?.device
+            ?.isActive,
+      },
+    );
+  })
+  .catch((error) => {
+    console.log(
+      "[PUSH-DEBUG][LAYOUT] Registration failed",
+      {
+        userId,
+        message:
+          error?.message ||
+          String(error),
+      },
+    );
+  });
 
-    const receivedSub = Notifications.addNotificationReceivedListener(() => {
-      const store = useAuthStore.getState();
+  const pushTokenSubscription =
+    subscribeToPushTokenChanges(
+      userId,
+    );
 
-      store.setUnreadNotificationCount(
-        store.unreadNotificationCount + 1
+  const receivedSubscription =
+    Notifications
+      .addNotificationReceivedListener(
+        () => {
+          /*
+           * Read the exact unread count from the
+           * server instead of assuming +1.
+           */
+          refreshUnreadCount();
+        },
       );
-    });
 
-    const responseSub =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data || {};
+  const responseSubscription =
+  Notifications
+    .addNotificationResponseReceivedListener(
+      (response) => {
+        const data =
+          response
+            ?.notification
+            ?.request
+            ?.content
+            ?.data || {};
 
-        if (data.screen === "events") {
-          router.push("/(protected)/events");
+        switch (data.screen) {
+          case "events":
+            if (data.eventId) {
+              router.push({
+                pathname:
+                  "/(protected)/events/[id]",
+
+                params: {
+                  id:
+                    String(
+                      data.eventId,
+                    ),
+
+                  source:
+                    "notification",
+                },
+              });
+            } else {
+              router.push(
+                "/(protected)/events",
+              );
+            }
+            break;
+
+          case "courses":
+            router.push(
+              "/(protected)/courses",
+            );
+            break;
+
+          case "calendar":
+            router.push(
+              "/(protected)/calendar",
+            );
+            break;
+
+          case "profile":
+            router.push(
+              "/(protected)/profile",
+            );
+            break;
+
+          case "notifications":
+          default:
+            router.push(
+              "/(protected)/notifications",
+            );
+            break;
         }
+      },
+    );
 
-        if (data.screen === "notifications") {
-          router.push("/(protected)/notifications");
-        }
-
-        if (data.screen === "profile") {
-          router.push("/(protected)/profile");
-        }
-      });
-
-    return () => {
-      receivedSub.remove();
-      responseSub.remove();
-    };
-  }, [userId, router]);
+  return () => {
+    pushTokenSubscription.remove();
+    receivedSubscription.remove();
+    responseSubscription.remove();
+  };
+}, [
+  userId,
+  router,
+  refreshUnreadCount,
+]);
 
   const notificationBadge =
     unreadCount > 0
@@ -95,54 +204,43 @@ export default function ProtectedLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: true,
+  headerShown: false,
 
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.icon,
+  tabBarShowLabel: true,
 
-        tabBarStyle: {
-          position: "absolute",
-          left: 16,
-          right: 16,
-          bottom: 12 + insets.bottom,
-        
-          height: tabBarHeight,
-        
-          borderRadius: 24,
-          backgroundColor: COLORS.white,
-          borderTopWidth: 0,
-        
-          paddingTop: 10,
-          paddingBottom: safeBottom,
-        
-          elevation: 8,
-        
-          shadowColor: COLORS.black,
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          shadowOffset: {
-            width: 0,
-            height: 8,
-          },
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
-          marginTop: 2,
-        },
+  tabBarActiveTintColor: COLORS.primary,
+  tabBarInactiveTintColor: COLORS.icon,
 
-        tabBarBadgeStyle: {
-          backgroundColor: COLORS.primary,
-          color: COLORS.white,
-          fontSize: 10,
-          fontWeight: "700",
-        },
-        tabBarItemStyle: {
-          height: 56,
-          paddingVertical: 4,
-        },
-      }}
+  tabBarStyle: {
+     height: tabBarHeight,
+
+  backgroundColor: COLORS.white,
+
+  borderTopWidth: 0,
+
+  paddingTop: 8,
+  paddingBottom: safeBottom,
+
+  elevation: 0,
+  shadowOpacity: 0,
+  },
+
+  tabBarLabelStyle: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+
+  tabBarBadgeStyle: {
+    backgroundColor: COLORS.primary,
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  tabBarItemStyle: {
+    flex: 1,
+  },
+}}
     >
       <Tabs.Screen
         name="home"
