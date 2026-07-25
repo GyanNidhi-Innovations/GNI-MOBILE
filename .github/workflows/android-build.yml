@@ -36,5 +36,5 @@ jobs:
       - name: Build Android with EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build -p android --profile preview --non-interactive
+        run: eas build -p android --profile preview --non-interactive --clear-cache
         

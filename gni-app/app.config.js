@@ -14,8 +14,7 @@ export default {
     },
 
     android: {
-      googleServicesFile:
-        process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      googleServicesFile:"./google-services.json",
       softwareKeyboardLayoutMode: "resize",
 
       permissions: ["CAMERA", "RECORD_AUDIO"],
