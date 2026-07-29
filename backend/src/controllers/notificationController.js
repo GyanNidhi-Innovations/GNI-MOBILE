@@ -12,6 +12,32 @@ import {
   uniqueUserIdsFromDevices,
 } from "../services/pushNotificationService.js";
 
+function isAuthenticatedUser(
+  req,
+  requestedUserId,
+) {
+  return (
+    String(
+      req.auth?.userId ||
+        "",
+    ) ===
+    String(
+      requestedUserId ||
+        "",
+    )
+  );
+}
+
+function rejectOtherUserAccess(
+  res,
+) {
+  return res.status(403).json({
+    success: false,
+    message:
+      "You cannot access another user's notification data",
+  });
+}
+
 async function updateInboxDeliveryStatuses(
   inboxDocuments,
   deliveryMap,
@@ -66,7 +92,10 @@ async function updateInboxDeliveryStatuses(
   );
 }
 
-export async function registerDeviceToken(req, res) {
+export async function registerDeviceToken(
+  req,
+  res,
+) {
   try {
     const {
       userId,
@@ -76,33 +105,53 @@ export async function registerDeviceToken(req, res) {
       deviceName,
     } = req.body;
 
-   
+    if (
+      !isAuthenticatedUser(
+        req,
+        userId,
+      )
+    ) {
+      return rejectOtherUserAccess(
+        res,
+      );
+    }
+
     console.log(
-  "[PUSH-DEBUG][BACKEND] register-token received",
-  {
-    database:
-      mongoose.connection.name,
-    collection:
-      NotificationToken.collection.name,
-    userId,
-    installationId,
-    platform,
-    deviceName,
-    tokenLength:
-      String(token || "").length,
-    tokenLast10:
-      String(token || "").slice(-10),
-  },
-);
+      "[PUSH-DEBUG][BACKEND] register-token received",
+      {
+        database:
+          mongoose.connection.name,
 
+        collection:
+          NotificationToken
+            .collection.name,
 
-    const cleanInstallationId = String(
-      installationId || "",
-    ).trim();
+        userId,
+        installationId,
+        platform,
+        deviceName,
 
-    const cleanToken = String(
-      token || "",
-    ).trim();
+        tokenLength:
+          String(
+            token || "",
+          ).length,
+
+        tokenLast10:
+          String(
+            token || "",
+          ).slice(-10),
+      },
+    );
+
+    const cleanInstallationId =
+      String(
+        installationId || "",
+      ).trim();
+
+    const cleanToken =
+      String(
+        token || "",
+      ).trim();
 
     const cleanPlatform = [
       "android",
@@ -117,91 +166,105 @@ export async function registerDeviceToken(req, res) {
       !cleanInstallationId ||
       !cleanToken
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "userId, installationId and token are required",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "userId, installationId and token are required",
+        });
     }
 
     if (
-      !mongoose.Types.ObjectId.isValid(
-        userId,
-      )
+      !mongoose.Types.ObjectId
+        .isValid(userId)
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid userId",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid userId",
+        });
     }
 
-    /*
-     * A token and an installation each identify
-     * one device-registration row.
-     */
-    const [tokenRecord, installationRecord] =
-      await Promise.all([
-        NotificationToken.findOne({
-          token: cleanToken,
-        }),
+    const [
+      tokenRecord,
+      installationRecord,
+    ] = await Promise.all([
+      NotificationToken.findOne({
+        token:
+          cleanToken,
+      }),
 
-        NotificationToken.findOne({
-          installationId:
-            cleanInstallationId,
-        }),
-      ]);
+      NotificationToken.findOne({
+        installationId:
+          cleanInstallationId,
+      }),
+    ]);
 
-      console.log(
-  "[PUSH-DEBUG][BACKEND] registration lookup result",
-  {
-    tokenRecordFound:
-      Boolean(tokenRecord),
+    console.log(
+      "[PUSH-DEBUG][BACKEND] registration lookup result",
+      {
+        tokenRecordFound:
+          Boolean(tokenRecord),
 
-    tokenRecordId:
-      tokenRecord?._id
-        ? String(tokenRecord._id)
-        : null,
+        tokenRecordId:
+          tokenRecord?._id
+            ? String(
+                tokenRecord._id,
+              )
+            : null,
 
-    tokenRecordUserId:
-      tokenRecord?.userId
-        ? String(tokenRecord.userId)
-        : null,
+        tokenRecordUserId:
+          tokenRecord?.userId
+            ? String(
+                tokenRecord.userId,
+              )
+            : null,
 
-    tokenRecordIsActive:
-      tokenRecord?.isActive ?? null,
+        tokenRecordIsActive:
+          tokenRecord?.isActive ??
+          null,
 
-    tokenRecordInstallationId:
-      tokenRecord?.installationId ||
-      null,
+        tokenRecordInstallationId:
+          tokenRecord
+            ?.installationId ||
+          null,
 
-    installationRecordFound:
-      Boolean(installationRecord),
+        installationRecordFound:
+          Boolean(
+            installationRecord,
+          ),
 
-    installationRecordId:
-      installationRecord?._id
-        ? String(
-            installationRecord._id,
-          )
-        : null,
+        installationRecordId:
+          installationRecord?._id
+            ? String(
+                installationRecord._id,
+              )
+            : null,
 
-    installationRecordUserId:
-      installationRecord?.userId
-        ? String(
-            installationRecord.userId,
-          )
-        : null,
+        installationRecordUserId:
+          installationRecord
+            ?.userId
+            ? String(
+                installationRecord
+                  .userId,
+              )
+            : null,
 
-    installationRecordIsActive:
-      installationRecord?.isActive ??
-      null,
+        installationRecordIsActive:
+          installationRecord
+            ?.isActive ??
+          null,
 
-    installationRecordTokenLast10:
-      String(
-        installationRecord?.token ||
-          "",
-      ).slice(-10),
-  },
-);
+        installationRecordTokenLast10:
+          String(
+            installationRecord
+              ?.token || "",
+          ).slice(-10),
+      },
+    );
 
     let record;
 
@@ -209,18 +272,13 @@ export async function registerDeviceToken(req, res) {
       tokenRecord &&
       installationRecord &&
       String(tokenRecord._id) !==
-        String(installationRecord._id)
+        String(
+          installationRecord._id,
+        )
     ) {
-      /*
-       * Same installation has an old token row,
-       * while the current token belongs to another
-       * legacy/racing row.
-       *
-       * Keep the current-token row and remove the
-       * stale installation row.
-       */
       await NotificationToken.deleteOne({
-        _id: installationRecord._id,
+        _id:
+          installationRecord._id,
       });
 
       record = tokenRecord;
@@ -232,34 +290,70 @@ export async function registerDeviceToken(req, res) {
     }
 
     record.userId = userId;
+
     record.installationId =
       cleanInstallationId;
-    record.token = cleanToken;
-    record.platform = cleanPlatform;
+
+    record.token =
+      cleanToken;
+
+    record.platform =
+      cleanPlatform;
+
     record.deviceName =
-      String(deviceName || "").trim();
+      String(
+        deviceName || "",
+      ).trim();
+
     record.isActive = true;
-    record.lastSeenAt = new Date();
-    record.lastFailedAt = null;
-    record.failureReason = "";
+    record.lastSeenAt =
+      new Date();
+
+    record.lastFailedAt =
+      null;
+
+    record.failureReason =
+      "";
 
     try {
       await record.save();
     } catch (error) {
-      /*
-       * A second simultaneous request may have
-       * completed first. Read the canonical row
-       * and update it instead of returning 500.
-       */
-      if (error?.code !== 11000) {
+      if (
+        error?.code !== 11000
+      ) {
         throw error;
       }
 
       const canonicalRecord =
-        await NotificationToken.findOne({
+        await NotificationToken
+          .findOne({
+            $or: [
+              {
+                token:
+                  cleanToken,
+              },
+              {
+                installationId:
+                  cleanInstallationId,
+              },
+            ],
+          });
+
+      if (!canonicalRecord) {
+        throw error;
+      }
+
+      await NotificationToken
+        .deleteMany({
+          _id: {
+            $ne:
+              canonicalRecord._id,
+          },
+
           $or: [
             {
-              token: cleanToken,
+              token:
+                cleanToken,
             },
             {
               installationId:
@@ -268,106 +362,112 @@ export async function registerDeviceToken(req, res) {
           ],
         });
 
-      if (!canonicalRecord) {
-        throw error;
-      }
+      canonicalRecord.userId =
+        userId;
 
-      await NotificationToken.deleteMany({
-        _id: {
-          $ne: canonicalRecord._id,
-        },
-
-        $or: [
-          {
-            token: cleanToken,
-          },
-          {
-            installationId:
-              cleanInstallationId,
-          },
-        ],
-      });
-
-      canonicalRecord.userId = userId;
-      canonicalRecord.installationId =
+      canonicalRecord
+        .installationId =
         cleanInstallationId;
-      canonicalRecord.token = cleanToken;
+
+      canonicalRecord.token =
+        cleanToken;
+
       canonicalRecord.platform =
         cleanPlatform;
+
       canonicalRecord.deviceName =
-        String(deviceName || "").trim();
-      canonicalRecord.isActive = true;
+        String(
+          deviceName || "",
+        ).trim();
+
+      canonicalRecord.isActive =
+        true;
+
       canonicalRecord.lastSeenAt =
         new Date();
-      canonicalRecord.lastFailedAt = null;
-      canonicalRecord.failureReason = "";
+
+      canonicalRecord.lastFailedAt =
+        null;
+
+      canonicalRecord.failureReason =
+        "";
 
       await canonicalRecord.save();
 
-      record = canonicalRecord;
+      record =
+        canonicalRecord;
     }
 
     console.log(
-  "[PUSH-DEBUG][BACKEND] device registration saved",
-  {
-    database:
-      mongoose.connection.name,
+      "[PUSH-DEBUG][BACKEND] device registration saved",
+      {
+        database:
+          mongoose.connection.name,
 
-    collection:
-      NotificationToken.collection.name,
+        collection:
+          NotificationToken
+            .collection.name,
 
-    documentId:
-      String(record._id),
+        documentId:
+          String(record._id),
 
-    userId:
-      String(record.userId),
+        userId:
+          String(record.userId),
 
-    installationId:
-      record.installationId,
+        installationId:
+          record
+            .installationId,
 
-    platform:
-      record.platform,
+        platform:
+          record.platform,
 
-    isActive:
-      record.isActive,
+        isActive:
+          record.isActive,
 
-    tokenLength:
-      String(record.token || "")
-        .length,
+        tokenLength:
+          String(
+            record.token || "",
+          ).length,
 
-    tokenLast10:
-      String(record.token || "")
-        .slice(-10),
+        tokenLast10:
+          String(
+            record.token || "",
+          ).slice(-10),
 
-    lastSeenAt:
-      record.lastSeenAt,
+        lastSeenAt:
+          record.lastSeenAt,
 
-    lastFailedAt:
-      record.lastFailedAt,
+        lastFailedAt:
+          record.lastFailedAt,
 
-    failureReason:
-      record.failureReason,
-  },
-);
+        failureReason:
+          record.failureReason,
+      },
+    );
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Notification device registered",
-      device: record,
-    });
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message:
+          "Notification device registered",
+        device:
+          record,
+      });
   } catch (error) {
     console.error(
       "registerDeviceToken error:",
       error,
     );
 
-    return res.status(500).json({
-      success: false,
-      message:
-        error?.message ||
-        "Unable to register notification device",
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error?.message ||
+          "Unable to register notification device",
+      });
   }
 }
 
@@ -381,74 +481,115 @@ export async function deactivateDeviceToken(
       installationId,
     } = req.body;
 
-    if (!userId || !installationId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "userId and installationId are required",
-      });
+    if (
+      !isAuthenticatedUser(
+        req,
+        userId,
+      )
+    ) {
+      return rejectOtherUserAccess(
+        res,
+      );
+    }
+
+    if (
+      !userId ||
+      !installationId
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "userId and installationId are required",
+        });
+    }
+
+    if (
+      !mongoose.Types.ObjectId
+        .isValid(userId)
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid userId",
+        });
     }
 
     console.log(
-  "[PUSH-DEBUG][BACKEND] deactivate-token received",
-  {
-    database:
-      mongoose.connection.name,
+      "[PUSH-DEBUG][BACKEND] deactivate-token received",
+      {
+        database:
+          mongoose.connection.name,
 
-    collection:
-      NotificationToken.collection.name,
+        collection:
+          NotificationToken
+            .collection.name,
 
-    userId,
-    installationId,
-  },
-);
-
-const deactivateResult =
-  await NotificationToken.updateOne(
-    {
-      userId,
-      installationId,
-    },
-    {
-      $set: {
-        isActive: false,
-        lastSeenAt: new Date(),
+        userId,
+        installationId,
       },
-    },
-  );
+    );
 
-console.log(
-  "[PUSH-DEBUG][BACKEND] deactivate-token completed",
-  {
-    userId,
-    installationId,
+    const deactivateResult =
+      await NotificationToken
+        .updateOne(
+          {
+            userId,
+            installationId:
+              String(
+                installationId,
+              ).trim(),
+          },
+          {
+            $set: {
+              isActive:
+                false,
 
-    matchedCount:
-      deactivateResult.matchedCount,
+              lastSeenAt:
+                new Date(),
+            },
+          },
+        );
 
-    modifiedCount:
-      deactivateResult.modifiedCount,
-  },
-);
-    /*
-     * Return success even if it was already
-     * inactive. Logout should be idempotent.
-     */
-    return res.status(200).json({
-      success: true,
-      message:
-        "This installation was deactivated",
-    });
+    console.log(
+      "[PUSH-DEBUG][BACKEND] deactivate-token completed",
+      {
+        userId,
+        installationId,
+
+        matchedCount:
+          deactivateResult
+            .matchedCount,
+
+        modifiedCount:
+          deactivateResult
+            .modifiedCount,
+      },
+    );
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message:
+          "This installation was deactivated",
+      });
   } catch (error) {
     console.error(
       "deactivateDeviceToken error:",
       error,
     );
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
   }
 }
 
@@ -457,17 +598,32 @@ export async function getMyNotifications(
   res,
 ) {
   try {
-    const { userId } = req.params;
+    const {
+      userId,
+    } = req.params;
 
     if (
-      !mongoose.Types.ObjectId.isValid(
+      !isAuthenticatedUser(
+        req,
         userId,
       )
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid userId",
-      });
+      return rejectOtherUserAccess(
+        res,
+      );
+    }
+
+    if (
+      !mongoose.Types.ObjectId
+        .isValid(userId)
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid userId",
+        });
     }
 
     const notifications =
@@ -480,20 +636,25 @@ export async function getMyNotifications(
         .limit(100)
         .lean();
 
-    return res.status(200).json({
-      success: true,
-      notifications,
-    });
+    return res
+      .status(200)
+      .json({
+        success: true,
+        notifications,
+      });
   } catch (error) {
     console.error(
       "getMyNotifications error:",
       error,
     );
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
   }
 }
 
@@ -502,22 +663,50 @@ export async function markNotificationRead(
   res,
 ) {
   try {
-    const { id } = req.params;
+    const {
+      id,
+    } = req.params;
+
+    const authenticatedUserId =
+      req.auth?.userId;
 
     if (
-      !mongoose.Types.ObjectId.isValid(id)
+      !authenticatedUserId
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid notification id",
-      });
+      return res
+        .status(401)
+        .json({
+          success: false,
+          message:
+            "Authentication required",
+        });
+    }
+
+    if (
+      !mongoose.Types.ObjectId
+        .isValid(id)
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid notification id",
+        });
     }
 
     const updated =
       await Notification
-        .findByIdAndUpdate(
-          id,
+        .findOneAndUpdate(
+          {
+            _id: id,
+
+            /*
+             * Ownership filter.
+             */
+            userId:
+              authenticatedUserId,
+          },
           {
             $set: {
               read: true,
@@ -529,27 +718,35 @@ export async function markNotificationRead(
         );
 
     if (!updated) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Notification not found",
-      });
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "Notification not found",
+        });
     }
 
-    return res.status(200).json({
-      success: true,
-      notification: updated,
-    });
+    return res
+      .status(200)
+      .json({
+        success: true,
+        notification:
+          updated,
+      });
   } catch (error) {
     console.error(
       "markNotificationRead error:",
       error,
     );
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
   }
 }
 
@@ -869,42 +1066,62 @@ export async function getUnreadCount(
   res,
 ) {
   try {
-    const { userId } = req.params;
+    const {
+      userId,
+    } = req.params;
 
     if (
-      !mongoose.Types.ObjectId.isValid(
+      !isAuthenticatedUser(
+        req,
         userId,
       )
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid userId",
-      });
+      return rejectOtherUserAccess(
+        res,
+      );
+    }
+
+    if (
+      !mongoose.Types.ObjectId
+        .isValid(userId)
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid userId",
+        });
     }
 
     const count =
-      await Notification.countDocuments({
-        userId,
-        read: false,
-      });
+      await Notification
+        .countDocuments({
+          userId,
+          read: false,
+        });
 
-    return res.status(200).json({
-      success: true,
-      count,
-    });
+    return res
+      .status(200)
+      .json({
+        success: true,
+        count,
+      });
   } catch (error) {
     console.error(
       "getUnreadCount error:",
       error,
     );
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
   }
 }
-
 export async function sendToAllUsers(
   req,
   res,

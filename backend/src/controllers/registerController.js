@@ -1,12 +1,22 @@
 // src/controllers/registerController.js
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+// import jwt from "jsonwebtoken";
 import { uploadResumeToSpaces } from "../services/spacesService.js";
 import Registration from "../models/Registration.js";
 
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+
+
+import RefreshSession from "../models/RefreshSession.js";
+
+import {
+  createAccessToken,
+  issueTokenPair,
+  rotateRefreshToken,
+  revokeRefreshToken,
+} from "../services/authTokenService.js";
 
 
 
@@ -21,114 +31,321 @@ const mailTransporter =
     },
   });
 
-export const loginRegistrationUser = async (req, res) => {
-  try {
-    console.log("LOGIN email", req.body.email);
+export const loginRegistrationUser =
+  async (req, res) => {
+    try {
+      const {
+        email,
+        password,
+      } = req.body || {};
 
-    const { email, password } = req.body || {};
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
-    }
-
-  
-    console.log("mongoose readyState:", mongoose.connection.readyState);
-    console.log("mongoose connection name:", mongoose.connection.name);
-    console.log("mongoose model names:", mongoose.modelNames());
-    console.log("Registration db:", Registration.db?.name);
-    console.log("Registration collection:", Registration.collection?.name);
-
-    const normalizedEmail = email.toLowerCase().trim();
-    console.log("normalizedEmail:", normalizedEmail);
-
-    const user = await Registration.findOne({ email: normalizedEmail });
-    console.log("user found:", !!user);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    if (!user.password) {
-      return res.status(500).json({
-        success: false,
-        message: "User account has no password stored. Please reset or re-register.",
-      });
-    }
-
-    console.log("user fields:", {
-      id: user._id,
-      email: user.email,
-      type: user.type,
-      hasPassword: !!user.password,
-      passwordType: typeof user.password,
-    });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log("password match:", isMatch);
-
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        email: user.email,
-        type: user.type,
-      },
-      process.env.JWT_SECRET || "your_super_secret_key",
-      {
-        expiresIn: "30d",
+      if (
+        !email ||
+        !password
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Email and password are required",
+          });
       }
-);
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        type: user.type,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        college: user.college,
-        year: user.year,
-        branch: user.branch,
-        degree: user.degree,
-        passoutYear: user.passoutYear,
-        joiningyear: user.joiningyear,
-        specialization: user.specialization,
-        currentCompany: user.currentCompany,
-        currentRole: user.currentRole,
-        experience: user.experience,
-        skills: user.skills,
-        resume: user.resume || null,
-        resumeSpacesKey: user.resumeSpacesKey || null,
-        resumeOriginalName: user.resumeOriginalName || null,
-        resumeStoredName: user.resumeStoredName || null,
-      },
-    });
-  } catch (error) {
-    console.error("loginRegistrationUser error:", error);
-    console.error("loginRegistrationUser stack:", error.stack);
+      const normalizedEmail =
+        String(email)
+          .trim()
+          .toLowerCase();
 
-    return res.status(500).json({
-      success: false,
-      message: "Server error during login",
-      error: error.message,
-    });
-  }
-};
+      const user =
+        await Registration.findOne({
+          email:
+            normalizedEmail,
+        });
+
+      if (
+        !user ||
+        !user.password
+      ) {
+        return res
+          .status(401)
+          .json({
+            success: false,
+            message:
+              "Invalid email or password",
+          });
+      }
+
+      const isMatch =
+        await bcrypt.compare(
+          password,
+          user.password,
+        );
+
+      if (!isMatch) {
+        return res
+          .status(401)
+          .json({
+            success: false,
+            message:
+              "Invalid email or password",
+          });
+      }
+
+      const {
+        accessToken,
+        refreshToken,
+        accessTokenExpiresInSeconds,
+      } = await issueTokenPair({
+        user,
+        req,
+      });
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          message:
+            "Login successful",
+
+          accessToken,
+          refreshToken,
+          accessTokenExpiresInSeconds,
+
+          user: {
+            id: user._id,
+            type: user.type,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            college:
+              user.college,
+            year: user.year,
+            branch: user.branch,
+            degree: user.degree,
+            passoutYear:
+              user.passoutYear,
+            joiningyear:
+              user.joiningyear,
+            specialization:
+              user.specialization,
+            currentCompany:
+              user.currentCompany,
+            currentRole:
+              user.currentRole,
+            experience:
+              user.experience,
+            skills: user.skills,
+            resume:
+              user.resume ||
+              null,
+            resumeSpacesKey:
+              user
+                .resumeSpacesKey ||
+              null,
+            resumeOriginalName:
+              user
+                .resumeOriginalName ||
+              null,
+            resumeStoredName:
+              user
+                .resumeStoredName ||
+              null,
+          },
+        });
+    } catch (error) {
+      console.error(
+        "loginRegistrationUser error:",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Server error during login",
+        });
+    }
+  };
+
+
+  export const refreshRegistrationSession =
+  async (req, res) => {
+    try {
+      const refreshToken =
+        String(
+          req.body
+            ?.refreshToken ||
+            "",
+        ).trim();
+
+      if (!refreshToken) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            code:
+              "REFRESH_TOKEN_REQUIRED",
+            message:
+              "Refresh token is required",
+          });
+      }
+
+      const rotation =
+        await rotateRefreshToken({
+          currentRefreshToken:
+            refreshToken,
+          req,
+        });
+
+      if (!rotation) {
+        return res
+          .status(401)
+          .json({
+            success: false,
+            code:
+              "INVALID_REFRESH_TOKEN",
+            message:
+              "Session expired. Please log in again.",
+          });
+      }
+
+      const user =
+        await Registration.findById(
+          rotation
+            .currentSession
+            .userId,
+        );
+
+      if (!user) {
+        return res
+          .status(401)
+          .json({
+            success: false,
+            code:
+              "USER_NOT_FOUND",
+            message:
+              "Session is no longer valid",
+          });
+      }
+
+      const refreshDays =
+        Number(
+          process.env
+            .REFRESH_TOKEN_DAYS ||
+            180,
+        );
+
+      await RefreshSession.create({
+        userId: user._id,
+
+        tokenHash:
+          rotation
+            .replacementHash,
+
+        expiresAt:
+          new Date(
+            Date.now() +
+              refreshDays *
+                24 *
+                60 *
+                60 *
+                1000,
+          ),
+
+        userAgent:
+          String(
+            req.get(
+              "user-agent",
+            ) || "",
+          ).slice(0, 500),
+
+        ipAddress:
+          String(
+            req.ip || "",
+          ).slice(0, 100),
+
+        lastUsedAt:
+          new Date(),
+      });
+
+      const accessToken =
+        createAccessToken(
+          user,
+        );
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          accessToken,
+
+          refreshToken:
+            rotation
+              .replacementToken,
+
+          accessTokenExpiresInSeconds:
+            15 * 60,
+        });
+    } catch (error) {
+      console.error(
+        "refreshRegistrationSession error:",
+        error,
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Unable to refresh session",
+        });
+    }
+  };
+
+export const logoutRegistrationSession =
+  async (req, res) => {
+    try {
+      const refreshToken =
+        String(
+          req.body
+            ?.refreshToken ||
+            "",
+        ).trim();
+
+      await revokeRefreshToken(
+        refreshToken,
+      );
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message:
+            "Logged out successfully",
+        });
+    } catch (error) {
+      console.error(
+        "logoutRegistrationSession error:",
+        error,
+      );
+
+      /*
+       * Logout is idempotent. The app will still
+       * remove local credentials.
+       */
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message:
+            "Logout processed",
+        });
+    }
+  };
 
 
 export const forgotRegistrationPassword =

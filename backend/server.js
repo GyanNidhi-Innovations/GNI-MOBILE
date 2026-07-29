@@ -1,6 +1,6 @@
 // server.js
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import mongoose from "mongoose";
 
@@ -12,7 +12,7 @@ import { initFirebaseAdmin } from "./src/config/firebaseAdmin.js";
 import premisesRoutes from "./src/routes/premisesRoutes.js";
 import uploadRoutes from "./src/routes/uploadRoutes.js";
 
-dotenv.config();
+
 
 const app = express();
 
