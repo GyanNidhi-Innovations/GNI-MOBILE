@@ -1,97 +1,202 @@
-// services/authService.js
-import { apiClient } from "./apiClient";
+import {
+  apiClient,
+} from "./apiClient";
 
-export const signupUserApi = async (payload) => {
-  const formData = new FormData();
+export const signupUserApi =
+  async (payload) => {
+    const formData =
+      new FormData();
 
-  Object.keys(payload).forEach((key) => {
-    if (
-      payload[key] !== undefined &&
-      payload[key] !== null &&
-      payload[key] !== "" &&
-      key !== "resume"
-    ) {
-      formData.append(key, payload[key]);
-    }
-  });
-
-  if (payload.resume) {
-    formData.append("resume", {
-      uri: payload.resume.uri,
-      name: payload.resume.name || "resume.pdf",
-      type: payload.resume.mimeType || "application/pdf",
+    Object.keys(
+      payload,
+    ).forEach((key) => {
+      if (
+        payload[key] !==
+          undefined &&
+        payload[key] !==
+          null &&
+        payload[key] !==
+          "" &&
+        key !== "resume"
+      ) {
+        formData.append(
+          key,
+          payload[key],
+        );
+      }
     });
-  }
 
-  return await apiClient("/signup", {
-    method: "POST",
-    body: formData,
-  });
-};
+    if (payload.resume) {
+      formData.append(
+        "resume",
+        {
+          uri:
+            payload.resume.uri,
 
-export const loginUserApi = async ({ email, password }) => {
-  return await apiClient("/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-};
+          name:
+            payload.resume.name ||
+            "resume.pdf",
 
+          type:
+            payload.resume
+              .mimeType ||
+            "application/pdf",
+        },
+      );
+    }
 
+    return apiClient(
+      "/signup",
+      {
+        method: "POST",
+        body: formData,
+        skipAuth: true,
+      },
+    );
+  };
 
-export const forgotPasswordApi = async ({ email }) => {
-  return await apiClient("/forgot-password", {
-    method: "POST",
-    body: JSON.stringify({
-      email: email.trim().toLowerCase(),
-    }),
-  });
-};
+export const loginUserApi =
+  async ({
+    email,
+    password,
+  }) => {
+    return apiClient(
+      "/login",
+      {
+        method: "POST",
 
-export const validateResetTokenApi = async (token) => {
-  return await apiClient(
-    `/reset-password/validate/${encodeURIComponent(token)}`,
-  );
-};
+        body:
+          JSON.stringify({
+            email:
+              email
+                .trim()
+                .toLowerCase(),
 
-export const resetPasswordApi = async ({ token, password }) => {
-  return await apiClient(
-    `/reset-password/${encodeURIComponent(token)}`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        password,
-      }),
-    },
-  );
-};
+            password,
+          }),
 
+        skipAuth: true,
+      },
+    );
+  };
 
-export const requestResetOtpApi = async ({
-  email,
-}) => {
-  return await apiClient(
-    "/mobile/forgot-password/request-otp",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-      }),
-    },
-  );
-};
+export const logoutUserApi =
+  async (
+    refreshToken,
+  ) => {
+    return apiClient(
+      "/logout",
+      {
+        method: "POST",
 
-export const verifyResetOtpApi = async ({
-  email,
-  otp,
-}) => {
-  return await apiClient(
-    "/mobile/forgot-password/verify-otp",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        otp: String(otp).trim(),
-      }),
-    },
-  );
-};
+        body:
+          JSON.stringify({
+            refreshToken,
+          }),
+
+        skipAuth: true,
+      },
+    );
+  };
+
+export const forgotPasswordApi =
+  async ({ email }) => {
+    return apiClient(
+      "/forgot-password",
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            email:
+              email
+                .trim()
+                .toLowerCase(),
+          }),
+
+        skipAuth: true,
+      },
+    );
+  };
+
+export const validateResetTokenApi =
+  async (token) => {
+    return apiClient(
+      `/reset-password/validate/${encodeURIComponent(
+        token,
+      )}`,
+      {
+        skipAuth: true,
+      },
+    );
+  };
+
+export const resetPasswordApi =
+  async ({
+    token,
+    password,
+  }) => {
+    return apiClient(
+      `/reset-password/${encodeURIComponent(
+        token,
+      )}`,
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            password,
+          }),
+
+        skipAuth: true,
+      },
+    );
+  };
+
+export const requestResetOtpApi =
+  async ({ email }) => {
+    return apiClient(
+      "/mobile/forgot-password/request-otp",
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            email:
+              email
+                .trim()
+                .toLowerCase(),
+          }),
+
+        skipAuth: true,
+      },
+    );
+  };
+
+export const verifyResetOtpApi =
+  async ({
+    email,
+    otp,
+  }) => {
+    return apiClient(
+      "/mobile/forgot-password/verify-otp",
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            email:
+              email
+                .trim()
+                .toLowerCase(),
+
+            otp:
+              String(
+                otp,
+              ).trim(),
+          }),
+
+        skipAuth: true,
+      },
+    );
+  };

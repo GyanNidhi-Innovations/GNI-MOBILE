@@ -29,53 +29,80 @@ export default function LoginScreen() {
 
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Validation", "Please enter email and password");
-      return;
-    }
+ const handleLogin = async () => {
+  const cleanEmail =
+    email.trim();
 
-    if (loading) return;
+  const cleanPassword =
+    password.trim();
 
-    try {
-      setLoading(true);
+  if (
+    !cleanEmail ||
+    !cleanPassword
+  ) {
+    Alert.alert(
+      "Validation",
+      "Please enter email and password",
+    );
 
-      const response = await loginUserApi({
-        email: email.trim(),
-        password: password.trim(),
+    return;
+  }
+
+  if (loading) {
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const response =
+      await loginUserApi({
+        email: cleanEmail,
+        password:
+          cleanPassword,
       });
 
-      if (response?.success) {
-        const token =
-          response.token ||
-          response.accessToken ||
-          response.jwt ||
-          response.data?.token ||
-          response.data?.accessToken ||
-          null;
-
-        const user = response.user || response.data?.user || null;
-
-        await setAuth({ user, token });
-
-        router.replace("/(protected)/home");
-      } else {
-        Alert.alert(
-          "Login Failed",
-          response?.message || "Invalid credentials"
-        );
-      }
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message ||
-          error?.message ||
-          "Something went wrong"
+    if (!response?.success) {
+      throw new Error(
+        response?.message ||
+          "Invalid credentials",
       );
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (
+      !response?.user ||
+      !response?.accessToken ||
+      !response?.refreshToken
+    ) {
+      throw new Error(
+        "The server returned an incomplete login response",
+      );
+    }
+
+    await setAuth({
+      user:
+        response.user,
+
+      accessToken:
+        response.accessToken,
+
+      refreshToken:
+        response.refreshToken,
+    });
+
+    router.replace(
+      "/(protected)/home",
+    );
+  } catch (error) {
+    Alert.alert(
+      "Login Failed",
+      error?.message ||
+        "Something went wrong",
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
   <AppScreen

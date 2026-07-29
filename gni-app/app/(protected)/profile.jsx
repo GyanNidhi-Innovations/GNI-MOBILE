@@ -17,10 +17,17 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
+import {
+  logoutUserApi,
+} from "@/services/authService";
 import AppScreen from "@/components/common/AppScreen";
 import ScreenHeader from "@/components/ui/ScreenHeader";
 import { useResponsive } from "@/hooks/useResponsive";
 import { COLORS } from "@/theme";
+
+import {
+  deactivateCurrentNotificationInstallation,
+} from "@/services/notificationService";
 
 export default function ProfileScreen() {
   const authUser = useAuthStore(
@@ -29,8 +36,10 @@ export default function ProfileScreen() {
   const logout = useAuthStore(
     (state) => state.logout,
   );
-  const setAuth = useAuthStore(
-    (state) => state.setAuth,
+  const updateUser =
+  useAuthStore(
+    (state) =>
+      state.updateUser,
   );
 
   const router = useRouter();
@@ -67,12 +76,12 @@ export default function ProfileScreen() {
           authUser?.id ||
           authUser?._id;
 
-        if (
-          showLoader &&
-          !user
-        ) {
-          setLoading(true);
-        }
+       if (
+  showLoader &&
+  !authUser
+) {
+  setLoading(true);
+}
 
         const profileResponse =
           await apiClient(
@@ -83,24 +92,24 @@ export default function ProfileScreen() {
           profileResponse?.user ||
           null;
 
-        setUser(fetchedUser);
-
         if (fetchedUser) {
-          setAuth({
-            user: {
-              ...fetchedUser,
+  const normalizedUser = {
+    ...fetchedUser,
 
-              id:
-                fetchedUser.id ||
-                fetchedUser._id,
-            },
+    id:
+      fetchedUser.id ||
+      fetchedUser._id,
+  };
 
-            token:
-              useAuthStore
-                .getState()
-                .token,
-          });
-        }
+  setUser(
+    normalizedUser,
+  );
+
+  await updateUser(
+    normalizedUser,
+  );
+}
+
       } catch (error) {
         console.log(
           "fetchProfile error:",
@@ -120,8 +129,7 @@ export default function ProfileScreen() {
     [
       authUser?.id,
       authUser?._id,
-      setAuth,
-      user,
+      updateUser,
     ],
   );
 
@@ -142,13 +150,59 @@ export default function ProfileScreen() {
 
  
 
-  const handleLogout = async () => {
+const handleLogout = async () => {
+  const userId =
+    authUser?.id ||
+    authUser?._id;
+
+  const refreshToken =
+    useAuthStore
+      .getState()
+      .refreshToken;
+
+  try {
+    /*
+     * Disable this phone's notification token
+     * before clearing the access token.
+     */
+    if (userId) {
+      await deactivateCurrentNotificationInstallation(
+        userId,
+      );
+    }
+  } catch (error) {
+    console.log(
+      "Notification deactivation error:",
+      error?.message || error,
+    );
+  }
+
+  try {
+    /*
+     * Revoke the refresh token on the backend.
+     */
+    if (refreshToken) {
+      await logoutUserApi(
+        refreshToken,
+      );
+    }
+  } catch (error) {
+    console.log(
+      "Server logout error:",
+      error?.message || error,
+    );
+  } finally {
+    /*
+     * Always clear local authentication.
+     */
     await logout();
 
     router.replace(
       "/auth/login",
     );
-  };
+  }
+};
+
 
   if (loading && !user) {
     return (

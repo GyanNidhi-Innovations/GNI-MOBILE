@@ -1,129 +1,291 @@
 import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 
-import {
-  deactivateCurrentNotificationInstallation,
-} from "../services/notificationService";
 
-export const useAuthStore = create((set, get) => ({
-  notifications: [],
-  registeredEvents: [],
+const ACCESS_TOKEN_KEY =
+  "authAccessToken";
 
-  user: null,
-  token: null,
-  authLoading: true,
+const REFRESH_TOKEN_KEY =
+  "authRefreshToken";
 
-  unreadNotificationCount: 0,
+const USER_KEY =
+  "authUser";
 
-  addNotification: (message) =>
-    set((state) => ({
-      notifications: [
-        {
-          id: Date.now(),
-          message,
-          createdAt: new Date(),
-        },
-        ...state.notifications,
-      ],
-    })),
+async function deleteStoredAuth() {
+  await Promise.all([
+    SecureStore.deleteItemAsync(
+      ACCESS_TOKEN_KEY,
+    ),
 
-  registerEvent: (eventId) =>
-    set((state) => ({
-      registeredEvents: [...state.registeredEvents, eventId],
-    })),
+    SecureStore.deleteItemAsync(
+      REFRESH_TOKEN_KEY,
+    ),
 
-  setUnreadNotificationCount: (count) =>
-    set({
-      unreadNotificationCount: count,
-    }),
+    SecureStore.deleteItemAsync(
+      USER_KEY,
+    ),
 
-  decrementUnreadNotificationCount: () =>
-    set((state) => ({
-      unreadNotificationCount:
-        state.unreadNotificationCount > 0
-          ? state.unreadNotificationCount - 1
-          : 0,
-    })),
+    /*
+     * Delete the token created by your
+     * previous 30-day authentication system.
+     */
+    SecureStore.deleteItemAsync(
+      "authToken",
+    ),
+  ]);
+}
 
-  setAuth: async (payload) => {
-    const token = payload.token || null;
-    const user = payload.user || null;
+export const useAuthStore =
+  create((set, get) => ({
+    notifications: [],
+    registeredEvents: [],
 
-    if (token) {
-      await SecureStore.setItemAsync("authToken", token);
-    }
+    user: null,
 
-    if (user) {
-      await SecureStore.setItemAsync("authUser", JSON.stringify(user));
-    }
+    /*
+     * token is retained as a compatibility alias.
+     * Existing code that reads state.token will
+     * receive the current access token.
+     */
+    token: null,
+    accessToken: null,
+    refreshToken: null,
 
-    set({
+    authLoading: true,
+    unreadNotificationCount: 0,
+
+    addNotification: (message) =>
+      set((state) => ({
+        notifications: [
+          {
+            id: Date.now(),
+            message,
+            createdAt:
+              new Date(),
+          },
+          ...state.notifications,
+        ],
+      })),
+
+    registerEvent: (eventId) =>
+      set((state) => ({
+        registeredEvents: [
+          ...state.registeredEvents,
+          eventId,
+        ],
+      })),
+
+    setUnreadNotificationCount:
+      (count) =>
+        set({
+          unreadNotificationCount:
+            count,
+        }),
+
+    decrementUnreadNotificationCount:
+      () =>
+        set((state) => ({
+          unreadNotificationCount:
+            state
+              .unreadNotificationCount >
+            0
+              ? state
+                  .unreadNotificationCount -
+                1
+              : 0,
+        })),
+
+    setAuth: async ({
       user,
-      token,
-      authLoading: false,
-    });
-  },
+      accessToken,
+      refreshToken,
+    }) => {
+      if (
+        !user ||
+        !accessToken ||
+        !refreshToken
+      ) {
+        throw new Error(
+          "Incomplete authentication response",
+        );
+      }
 
-  loadAuth: async () => {
-    try {
-      const token = await SecureStore.getItemAsync("authToken");
-      const userString = await SecureStore.getItemAsync("authUser");
+      await Promise.all([
+        SecureStore.setItemAsync(
+          ACCESS_TOKEN_KEY,
+          accessToken,
+        ),
+
+        SecureStore.setItemAsync(
+          REFRESH_TOKEN_KEY,
+          refreshToken,
+        ),
+
+        SecureStore.setItemAsync(
+          USER_KEY,
+          JSON.stringify(user),
+        ),
+      ]);
 
       set({
-        token: token || null,
-        user: userString ? JSON.parse(userString) : null,
+        user,
+
+        token: accessToken,
+        accessToken,
+        refreshToken,
+
         authLoading: false,
       });
-    } catch (error) {
-      console.log("Load auth error:", error);
+    },
+
+    updateUser: async (user) => {
+      if (!user) {
+        return;
+      }
+
+      await SecureStore.setItemAsync(
+        USER_KEY,
+        JSON.stringify(user),
+      );
+
+      set({
+        user,
+      });
+    },
+
+    updateTokens: async ({
+      accessToken,
+      refreshToken,
+    }) => {
+      if (
+        !accessToken ||
+        !refreshToken
+      ) {
+        throw new Error(
+          "Both access and refresh tokens are required",
+        );
+      }
+
+      await Promise.all([
+        SecureStore.setItemAsync(
+          ACCESS_TOKEN_KEY,
+          accessToken,
+        ),
+
+        SecureStore.setItemAsync(
+          REFRESH_TOKEN_KEY,
+          refreshToken,
+        ),
+      ]);
+
+      set({
+        token: accessToken,
+        accessToken,
+        refreshToken,
+      });
+    },
+
+    loadAuth: async () => {
+      try {
+        const [
+          accessToken,
+          refreshToken,
+          userString,
+        ] = await Promise.all([
+          SecureStore.getItemAsync(
+            ACCESS_TOKEN_KEY,
+          ),
+
+          SecureStore.getItemAsync(
+            REFRESH_TOKEN_KEY,
+          ),
+
+          SecureStore.getItemAsync(
+            USER_KEY,
+          ),
+        ]);
+
+        if (
+          !accessToken ||
+          !refreshToken ||
+          !userString
+        ) {
+          await deleteStoredAuth();
+
+          set({
+            user: null,
+            token: null,
+            accessToken: null,
+            refreshToken: null,
+            authLoading: false,
+          });
+
+          return;
+        }
+
+        set({
+          user:
+            JSON.parse(userString),
+
+          token: accessToken,
+          accessToken,
+          refreshToken,
+
+          authLoading: false,
+        });
+      } catch (error) {
+        console.log(
+          "Load auth error:",
+          error,
+        );
+
+        await deleteStoredAuth();
+
+        set({
+          user: null,
+          token: null,
+          accessToken: null,
+          refreshToken: null,
+          authLoading: false,
+        });
+      }
+    },
+
+    clearAuth: async () => {
+      await deleteStoredAuth();
+
       set({
         user: null,
         token: null,
+        accessToken: null,
+        refreshToken: null,
+        unreadNotificationCount: 0,
         authLoading: false,
       });
-    }
-  },
+    },
 
-  logout: async () => {
-  const currentUser = get().user;
+    logout: async () => {
+  await Promise.all([
+    SecureStore.deleteItemAsync(
+      "authAccessToken",
+    ),
 
-  const userId =
-    currentUser?.id ||
-    currentUser?._id;
+    SecureStore.deleteItemAsync(
+      "authRefreshToken",
+    ),
 
-  /*
-   * Best-effort server cleanup.
-   *
-   * Failure must not prevent the user from
-   * logging out locally.
-   */
-  try {
-    if (userId) {
-      await deactivateCurrentNotificationInstallation(
-        userId,
-      );
-    }
-  } catch (error) {
-    console.log(
-      "Notification device deactivation failed:",
-      error?.message || error,
-    );
-  }
-
-  await SecureStore.deleteItemAsync(
-    "authToken",
-  );
-
-  await SecureStore.deleteItemAsync(
-    "authUser",
-  );
+    SecureStore.deleteItemAsync(
+      "authUser",
+    ),
+  ]);
 
   set({
     user: null,
     token: null,
+    accessToken: null,
+    refreshToken: null,
     unreadNotificationCount: 0,
     authLoading: false,
   });
 },
-
-}));
+  }));
