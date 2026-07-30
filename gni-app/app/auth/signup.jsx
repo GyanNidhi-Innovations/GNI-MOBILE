@@ -213,7 +213,12 @@ function PickerField({
             color: value ? "#101828" : "#667085",
           }}
         >
-          <Picker.Item label={placeholder} value="" />
+         <Picker.Item
+  label={placeholder}
+  value=""
+    enabled={value === ""}
+/>
+
           {options.map((option) => {
             const item =
               typeof option === "string"
@@ -223,7 +228,7 @@ function PickerField({
             return (
               <Picker.Item
                 key={item.value}
-                label={item.label}
+                label={`   ${item.label}`}
                 value={item.value}
               />
             );
@@ -715,32 +720,44 @@ export default function SignupScreen() {
         return;
       }
 
-      const token =
-        loginResponse.token ||
-        loginResponse.accessToken ||
-        loginResponse.jwt ||
-        loginResponse.data?.token ||
-        loginResponse.data?.accessToken ||
-        null;
+     const accessToken =
+  loginResponse.accessToken ||
+  loginResponse.data?.accessToken ||
+  null;
 
-      const responseUser =
-        loginResponse.user || loginResponse.data?.user || null;
+const refreshToken =
+  loginResponse.refreshToken ||
+  loginResponse.data?.refreshToken ||
+  null;
 
-      if (!token || !responseUser) {
-        throw new Error("Login succeeded without a token or user record");
-      }
+const responseUser =
+  loginResponse.user ||
+  loginResponse.data?.user ||
+  null;
 
-      const authenticatedUser = {
-        ...responseUser,
-        // Backend login should return this. The fallback keeps the selected type
-        // available in the app even if an older backend response omits it.
-        type: responseUser.type || form.type,
-      };
+if (
+  !accessToken ||
+  !refreshToken ||
+  !responseUser
+) {
+  throw new Error(
+    "Login succeeded without complete authentication data",
+  );
+}
 
-      await setAuth({
-        user: authenticatedUser,
-        token,
-      });
+const authenticatedUser = {
+  ...responseUser,
+
+  type:
+    responseUser.type ||
+    form.type,
+};
+
+await setAuth({
+  user: authenticatedUser,
+  accessToken,
+  refreshToken,
+});
 
       router.replace("/(protected)/home");
     } catch (error) {
