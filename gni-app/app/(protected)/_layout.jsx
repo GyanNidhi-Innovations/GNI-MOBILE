@@ -1,4 +1,4 @@
-import { useEffect, useRef,useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { Tabs, useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -256,19 +256,37 @@ registerForFcmNotifications(userId)
         }}
       />
 
-      <Tabs.Screen
-        name="events"
-        options={{
-          title: "Events",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "calendar" : "calendar-outline"}
-              size={22}
-              color={color}
-            />
-          ),
-        }}
+     <Tabs.Screen
+  name="events"
+  listeners={{
+    tabPress: (event) => {
+      event.preventDefault();
+
+      router.replace(
+        "/(protected)/events",
+      );
+    },
+  }}
+
+  options={{
+    title: "Events",
+
+    tabBarIcon: ({
+      color,
+      focused,
+    }) => (
+      <Ionicons
+        name={
+          focused
+            ? "calendar"
+            : "calendar-outline"
+        }
+        size={22}
+        color={color}
       />
+    ),
+  }}
+/>
 
       <Tabs.Screen
         name="calendar"

@@ -247,6 +247,137 @@ const handleLogout = async () => {
         .toUpperCase()
     : "U";
 
+ const commonProfileFields = [
+  {
+    icon: "person-outline",
+    label: "Name",
+    value: user.name,
+  },
+  {
+    icon: "mail-outline",
+    label: "Email",
+    value: user.email,
+  },
+  {
+    icon: "call-outline",
+    label: "Phone",
+    value:
+      user.phone ||
+      user.mobile,
+  },
+];
+
+let typeSpecificProfileFields = [];
+
+if (
+  user.type ===
+  "student-college"
+) {
+  typeSpecificProfileFields = [
+    {
+      icon: "school-outline",
+      label: "College",
+      value: user.college,
+    },
+    {
+      icon: "calendar-outline",
+      label: "Year of Study",
+      value: user.year,
+    },
+    {
+      icon: "time-outline",
+      label: "Joining Year",
+      value:
+        user.joiningyear,
+    },
+    {
+      icon: "book-outline",
+      label: "Branch",
+      value:
+        user.branch ||
+        user.specialization,
+    },
+    {
+      icon: "bulb-outline",
+      label: "Skills / Interests",
+      value: user.skills,
+    },
+  ];
+}
+
+if (
+  user.type ===
+  "jobseeker-fresher"
+) {
+  typeSpecificProfileFields = [
+    {
+      icon: "school-outline",
+      label: "Degree",
+      value: user.degree,
+    },
+    {
+      icon: "calendar-outline",
+      label: "Pass-out Year",
+      value:
+        user.passoutYear,
+    },
+    {
+      icon: "book-outline",
+      label: "Branch",
+      value:
+        user.branch ||
+        user.specialization,
+    },
+    {
+      icon: "bulb-outline",
+      label: "Skills / Interests",
+      value: user.skills,
+    },
+  ];
+}
+
+if (
+  user.type ===
+  "working-professional"
+) {
+  typeSpecificProfileFields = [
+    {
+      icon: "business-outline",
+      label: "Current Company",
+      value:
+        user.currentCompany,
+    },
+    {
+      icon: "briefcase-outline",
+      label: "Current Role",
+      value:
+        user.currentRole,
+    },
+    {
+      icon: "time-outline",
+      label: "Experience",
+      value: user.experience,
+    },
+    {
+      icon: "bulb-outline",
+      label: "Skills / Interests",
+      value: user.skills,
+    },
+  ];
+}
+
+const visibleProfileFields = [
+  ...commonProfileFields,
+  ...typeSpecificProfileFields,
+].filter((item) => {
+  return (
+    item.value !== undefined &&
+    item.value !== null &&
+    String(item.value).trim() !== ""
+  );
+});
+
+
   return (
     <AppScreen
       refreshing={refreshing}
@@ -390,43 +521,25 @@ const handleLogout = async () => {
           Personal Details
         </Text>
 
-        <ProfileItem
-          icon="person-outline"
-          label="Name"
-          value={user.name}
-          type={type}
-        />
+        {visibleProfileFields.map(
+  (item, index) => (
+    <View key={item.label}>
+      <ProfileItem
+        icon={item.icon}
+        label={item.label}
+        value={item.value}
+        type={type}
+      />
+
+      {index <
+      visibleProfileFields.length -
+        1 ? (
         <Divider />
-        <ProfileItem
-          icon="mail-outline"
-          label="Email"
-          value={user.email}
-          type={type}
-        />
-        <Divider />
-        <ProfileItem
-          icon="call-outline"
-          label="Phone"
-          value={
-            user.phone ||
-            user.mobile
-          }
-          type={type}
-        />
-        <Divider />
-        <ProfileItem
-          icon="school-outline"
-          label="College"
-          value={user.college}
-          type={type}
-        />
-        <Divider />
-        <ProfileItem
-          icon="book-outline"
-          label="Branch"
-          value={user.branch}
-          type={type}
-        />
+      ) : null}
+    </View>
+  ),
+)}
+
       </View>
 
       

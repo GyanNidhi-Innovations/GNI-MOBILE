@@ -105,20 +105,21 @@ function EventCard({
   const startAt =
     getEventStart(item);
 
-  const openEvent = () => {
-    if (!item?._id) {
-      return;
-    }
+ const openEvent = () => {
+  if (!item?._id) {
+    return;
+  }
 
-    router.push({
-      pathname:
-        "/(protected)/events/[id]",
+  router.push({
+    pathname:
+      "/(protected)/events/[id]",
 
-      params: {
-        id: String(item._id),
-      },
-    });
-  };
+    params: {
+      id: String(item._id),
+      source: "events",
+    },
+  });
+};
 
   return (
     <Pressable

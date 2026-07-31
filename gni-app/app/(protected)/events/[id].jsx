@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
   Modal,
   Pressable,
@@ -186,8 +187,13 @@ function InformationRow({
 }
 
 export default function EventDetailsScreen() {
-  const { id } =
-    useLocalSearchParams();
+ const { id, source } =
+  useLocalSearchParams();
+
+const navigationSource =
+  Array.isArray(source)
+    ? source[0]
+    : source;
 
   const insets =
     useSafeAreaInsets();
@@ -223,6 +229,67 @@ export default function EventDetailsScreen() {
     Array.isArray(id)
       ? id[0]
       : id;
+
+
+
+  const handleBack = useCallback(() => {
+  if (posterViewerVisible) {
+    setPosterViewerVisible(false);
+    return;
+  }
+
+  switch (navigationSource) {
+    case "notification":
+      router.replace(
+        "/(protected)/notifications",
+      );
+      return;
+
+    case "calendar":
+      router.replace(
+        "/(protected)/calendar",
+      );
+      return;
+
+    case "home":
+      router.replace(
+        "/(protected)/home",
+      );
+      return;
+
+    case "profile":
+      router.replace(
+        "/(protected)/profile",
+      );
+      return;
+
+    case "events":
+    default:
+      router.replace(
+        "/(protected)/events",
+      );
+  }
+}, [
+  navigationSource,
+  posterViewerVisible,
+]);
+
+
+
+useEffect(() => {
+  const subscription =
+    BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        handleBack();
+        return true;
+      },
+    );
+
+  return () => {
+    subscription.remove();
+  };
+}, [handleBack]);
 
   const heroHeight =
     Math.min(
@@ -411,9 +478,7 @@ export default function EventDetailsScreen() {
           </Text>
 
           <Pressable
-            onPress={() =>
-              router.back()
-            }
+            onPress={handleBack}
             style={styles.goBackButton}
           >
             <Text
@@ -489,9 +554,8 @@ export default function EventDetailsScreen() {
             style={styles.topBar}
           >
             <Pressable
-              onPress={() =>
-                router.back()
-              }
+              onPress={handleBack}
+
               hitSlop={12}
               style={({ pressed }) => ({
                 width: 44,
