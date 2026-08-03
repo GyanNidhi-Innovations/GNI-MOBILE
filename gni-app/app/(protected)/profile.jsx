@@ -540,9 +540,84 @@ const visibleProfileFields = [
   ),
 )}
 
-      </View>
+            </View>
 
-      
+      <View
+        style={{
+          marginBottom: 24,
+
+          borderRadius:
+            isCompactPhone
+              ? 22
+              : 26,
+
+          backgroundColor:
+            "#FFFFFF",
+
+          padding:
+            layout.cardPadding,
+
+          borderWidth: 1,
+
+          borderColor:
+            "#EAECF0",
+        }}
+      >
+        <Text
+          style={{
+            marginBottom: 8,
+
+            color: "#101828",
+
+            fontSize:
+              type.sectionTitle,
+
+            fontWeight: "800",
+          }}
+        >
+          Help & Support
+        </Text>
+
+ <SupportMenuItem
+  icon="headset-outline"
+  label="Contact Support"
+  description="Get help with your account or the app."
+  isCompactPhone={isCompactPhone}
+  onPress={() =>
+    router.push(
+      "/auth/support",
+    )
+  }
+/>
+
+<Divider />
+
+<SupportMenuItem
+  icon="shield-checkmark-outline"
+  label="Privacy Policy"
+  description="Learn how your information is handled."
+  isCompactPhone={isCompactPhone}
+  onPress={() =>
+    router.push(
+      "/auth/privacy-policy",
+    )
+  }
+/>
+
+<Divider />
+
+<SupportMenuItem
+  icon="document-text-outline"
+  label="Terms and Conditions"
+  description="Review the terms for using GyanNidhi."
+  isCompactPhone={isCompactPhone}
+  onPress={() =>
+    router.push(
+      "/auth/terms-and-conditions",
+    )
+  }
+/>
+      </View>
 
       <Pressable
         onPress={handleLogout}
@@ -624,6 +699,164 @@ function ProfileItem({
 function Divider() {
   return (
     <View className="my-5 h-px bg-[#EAECF0]" />
+  );
+}
+
+function SupportMenuItem({
+  icon,
+  label,
+  description,
+  onPress,
+  isCompactPhone,
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        position: "relative",
+
+        width: "100%",
+
+        minHeight:
+          isCompactPhone
+            ? 64
+            : 74,
+
+        justifyContent: "center",
+
+        paddingVertical:
+          isCompactPhone
+            ? 10
+            : 12,
+
+        /*
+         * Reserved area for the chevron.
+         */
+        paddingRight:
+          isCompactPhone
+            ? 32
+            : 38,
+
+        opacity:
+          pressed ? 0.65 : 1,
+      })}
+    >
+      {/* Leading icon and text */}
+      <View
+        style={{
+          width: "100%",
+
+          flexDirection: "row",
+
+          alignItems: "center",
+        }}
+      >
+        <View
+          style={{
+            width:
+              isCompactPhone
+                ? 34
+                : 40,
+
+            flexShrink: 0,
+
+            alignItems: "flex-start",
+
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons
+            name={icon}
+            size={
+              isCompactPhone
+                ? 21
+                : 24
+            }
+            color="#101828"
+          />
+        </View>
+
+        <View
+          style={{
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              color: "#101828",
+
+              fontSize:
+                isCompactPhone
+                  ? 14
+                  : 16,
+
+              lineHeight:
+                isCompactPhone
+                  ? 19
+                  : 22,
+
+              fontWeight: "700",
+            }}
+          >
+            {label}
+          </Text>
+
+          <Text
+            numberOfLines={2}
+            style={{
+              marginTop: 3,
+
+              color: "#667085",
+
+              fontSize:
+                isCompactPhone
+                  ? 11.5
+                  : 13,
+
+              lineHeight:
+                isCompactPhone
+                  ? 16
+                  : 19,
+            }}
+          >
+            {description}
+          </Text>
+        </View>
+      </View>
+
+      {/* Permanently fixed at the far right */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+
+          top: 0,
+          right: 0,
+          bottom: 0,
+
+          width:
+            isCompactPhone
+              ? 24
+              : 28,
+
+          alignItems: "flex-end",
+
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons
+          name="chevron-forward"
+          size={
+            isCompactPhone
+              ? 19
+              : 22
+          }
+          color="#667085"
+        />
+      </View>
+    </Pressable>
   );
 }
 

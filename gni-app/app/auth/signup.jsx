@@ -1117,10 +1117,55 @@ await setAuth({
   style={{
     width: "100%",
     alignItems: "center",
-    marginTop: 20,
+    marginTop: 5,
     marginBottom: 30,
   }}
 >
+   <Text
+    style={{
+      width: "88%",
+      marginBottom: 16,
+      color: "#667085",
+      fontSize: 12.5,
+      lineHeight: 19,
+      textAlign: "center",
+    }}
+  >
+    By clicking Register, you agree to
+    GyanNidhi Innovations&apos;{" "}
+
+    <Text
+      onPress={() =>
+        router.push(
+          "/auth/terms-and-conditions",
+        )
+      }
+      style={{
+        color: "#0F5EFF",
+        fontWeight: "700",
+      }}
+    >
+      Terms & Conditions
+    </Text>
+
+    {" "}and{" "}
+
+    <Text
+      onPress={() =>
+        router.push(
+          "/auth/privacy-policy",
+        )
+      }
+      style={{
+        color: "#0F5EFF",
+        fontWeight: "700",
+      }}
+    >
+      Privacy Policy
+    </Text>
+    .
+  </Text>
+  
   {/* Blue Register button */}
   <View
     style={{
