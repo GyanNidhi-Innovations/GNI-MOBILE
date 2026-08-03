@@ -1080,6 +1080,197 @@ export const registerUser = async (req, res) => {
       ...resumeFields,
     });
 
+
+
+    try {
+  const termsUrl =
+    process.env
+      .GYANNIDHI_TERMS_URL ||
+    "https://gyannidhi.in/terms-and-conditions";
+
+  const privacyUrl =
+    process.env
+      .GYANNIDHI_PRIVACY_URL ||
+    "https://gyannidhi.in/privacy-policy";
+
+  await mailTransporter.sendMail({
+    from:
+      process.env.SMTP_FROM ||
+      '"GyanNidhi Innovations" <support@gyannidhi.in>',
+
+    to: user.email,
+
+    subject:
+      "Welcome to GyanNidhi",
+
+    text: [
+      `Hello ${user.name || "User"},`,
+      "",
+      "Your GyanNidhi account has been created successfully.",
+      "",
+      "You can now access events, opportunities, alerts, and other GyanNidhi services through the mobile application.",
+      "",
+      `Terms and Conditions: ${termsUrl}`,
+      `Privacy Policy: ${privacyUrl}`,
+      "",
+      "If you did not create this account, contact us immediately at support@gyannidhi.in.",
+      "",
+      "Regards,",
+      "GyanNidhi Innovations",
+    ].join("\n"),
+
+    html: `
+      <div
+        style="
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 28px;
+          font-family: Arial, sans-serif;
+          color: #101828;
+          background: #ffffff;
+        "
+      >
+        <div
+          style="
+            padding: 24px;
+            border-radius: 16px;
+            background: #001B3D;
+            color: #ffffff;
+          "
+        >
+          <h1
+            style="
+              margin: 0;
+              font-size: 25px;
+            "
+          >
+            Welcome to GyanNidhi
+          </h1>
+
+          <p
+            style="
+              margin: 10px 0 0;
+              color: #D9E5F2;
+            "
+          >
+            Your account has been created successfully.
+          </p>
+        </div>
+
+        <div
+          style="
+            padding: 25px 4px;
+          "
+        >
+          <p>
+            Hello
+            <strong>
+              ${user.name || "User"}
+            </strong>,
+          </p>
+
+          <p
+            style="
+              line-height: 1.7;
+              color: #475467;
+            "
+          >
+            Your GyanNidhi account has been
+            created successfully. You can now
+            access events, opportunities,
+            alerts, and other services through
+            the GyanNidhi mobile application.
+          </p>
+
+          <p
+            style="
+              margin-top: 26px;
+              line-height: 1.7;
+              color: #475467;
+            "
+          >
+            By registering, you agreed to our
+            Terms and Conditions and Privacy
+            Policy.
+          </p>
+
+          <div
+            style="
+              margin-top: 24px;
+            "
+          >
+            <a
+              href="${termsUrl}"
+              style="
+                display: inline-block;
+                margin-right: 10px;
+                margin-bottom: 10px;
+                padding: 12px 18px;
+                border-radius: 10px;
+                background: #022670;
+                color: #ffffff;
+                text-decoration: none;
+                font-weight: 700;
+              "
+            >
+              Terms and Conditions
+            </a>
+
+            <a
+              href="${privacyUrl}"
+              style="
+                display: inline-block;
+                margin-bottom: 10px;
+                padding: 12px 18px;
+                border-radius: 10px;
+                background: #EEF4FF;
+                color: #0F5EFF;
+                text-decoration: none;
+                font-weight: 700;
+              "
+            >
+              Privacy Policy
+            </a>
+          </div>
+
+          <p
+            style="
+              margin-top: 28px;
+              font-size: 13px;
+              line-height: 1.6;
+              color: #667085;
+            "
+          >
+            If you did not create this account,
+            contact us immediately at
+            support@gyannidhi.in.
+          </p>
+
+          <p
+            style="
+              margin-top: 24px;
+              color: #475467;
+            "
+          >
+            Regards,<br />
+            <strong>GyanNidhi Innovations</strong>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+} catch (mailError) {
+  /*
+   * Do not cancel account creation merely
+   * because the welcome email failed.
+   */
+  console.error(
+    "Welcome email error:",
+    mailError?.message ||
+      mailError,
+  );
+}
+
     return res.status(201).json({
       success: true,
       message: "Signup successful",
