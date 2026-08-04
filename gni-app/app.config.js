@@ -20,10 +20,20 @@ export default {
       softwareKeyboardLayoutMode: "resize",
 
       permissions: ["CAMERA", "RECORD_AUDIO"],
+        icon:
+         "./assets/images/app-icon.png",
+
       adaptiveIcon: {
-        backgroundColor: "#FFFFFF",
-        foregroundImage: "./assets/images/app-icon.png",
-      },
+    foregroundImage:
+      "./assets/images/app-icon-foreground.png",
+
+    monochromeImage:
+      "./assets/images/app-icon-foreground.png",
+
+    backgroundColor:
+      "#FFFFFF",
+  },
+
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.gyannidhi.mobile",
@@ -49,9 +59,14 @@ export default {
       [
   "expo-notifications",
   {
-    icon: "./assets/images/gyan-icon.png",
-    color: "#ffffff",
-    defaultChannel: "default",
+    icon:
+      "./assets/images/notification-icon.png",
+
+    color:
+      "#001B3D",
+
+    defaultChannel:
+      "default",
   },
 ],
       [

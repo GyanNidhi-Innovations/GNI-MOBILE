@@ -49,9 +49,26 @@ const YEAR_OF_STUDY_OPTIONS = [
   "4th Year",
 ];
 
-const JOINING_YEAR_OPTIONS = Array.from({ length: 27 }, (_, index) =>
-  String(2000 + index),
-);
+const JOINING_YEAR_START =
+  2021;
+
+const CURRENT_YEAR =
+  new Date().getFullYear();
+
+const JOINING_YEAR_OPTIONS =
+  Array.from(
+    {
+      length:
+        CURRENT_YEAR -
+        JOINING_YEAR_START +
+        1,
+    },
+    (_, index) =>
+      String(
+        JOINING_YEAR_START +
+          index,
+      ),
+  );
 
 const PASSOUT_YEAR_OPTIONS = Array.from({ length: 31 }, (_, index) =>
   String(2000 + index),
@@ -1117,16 +1134,15 @@ await setAuth({
   style={{
     width: "100%",
     alignItems: "center",
-    marginTop: 5,
     marginBottom: 30,
   }}
 >
    <Text
     style={{
-      width: "88%",
+      width: "100%",
       marginBottom: 16,
       color: "#667085",
-      fontSize: 12.5,
+      fontSize: 12,
       lineHeight: 19,
       textAlign: "center",
     }}

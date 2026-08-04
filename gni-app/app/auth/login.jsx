@@ -6,6 +6,7 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 
@@ -24,6 +25,17 @@ import AppScreen from "../../src/components/common/AppScreen";
 import AppInput from "../../src/components/ui/AppInput";
 
 export default function LoginScreen() {
+  
+  const { height } =
+  useWindowDimensions();
+
+const signupSupportGap =
+  height < 700
+    ? 10
+    : height < 800
+      ? 20
+      : 60;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -286,55 +298,6 @@ export default function LoginScreen() {
       Sign up
     </Text>
   </Text>
-</Pressable>
-
-<View
-  style={{
-    height: 14,
-  }}
-/>
-
-<Pressable
-  disabled={loading}
-  onPress={() =>
-    router.push(
-      "/auth/support",
-    )
-  }
-  style={({ pressed }) => ({
-    alignSelf: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-    opacity: pressed ? 0.65 : 1,
-  })}
->
-  <View
-    style={{
-      flexDirection: "row",
-      flexWrap: "nowrap",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <Ionicons
-      name="help-circle-outline"
-      size={17}
-      color="#526B93"
-    />
-
-    <Text
-      numberOfLines={1}
-      style={{
-        marginLeft: 4,
-        color: "#526B93",
-        fontSize: 13,
-        lineHeight: 19,
-        fontWeight: "700",
-      }}
-    >
-      Need help? Contact Support
-    </Text>
-  </View>
 </Pressable>
   </AppScreen>
 );
