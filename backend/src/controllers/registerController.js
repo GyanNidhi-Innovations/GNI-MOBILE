@@ -1181,57 +1181,6 @@ export const registerUser = async (req, res) => {
 
           <p
             style="
-              margin-top: 26px;
-              line-height: 1.7;
-              color: #475467;
-            "
-          >
-            By registering, you agreed to our
-            Terms and Conditions and Privacy
-            Policy.
-          </p>
-
-          <div
-            style="
-              margin-top: 24px;
-            "
-          >
-            <a
-              href="${termsUrl}"
-              style="
-                display: inline-block;
-                margin-right: 10px;
-                margin-bottom: 10px;
-                padding: 12px 18px;
-                border-radius: 10px;
-                background: #022670;
-                color: #ffffff;
-                text-decoration: none;
-                font-weight: 700;
-              "
-            >
-              Terms and Conditions
-            </a>
-
-            <a
-              href="${privacyUrl}"
-              style="
-                display: inline-block;
-                margin-bottom: 10px;
-                padding: 12px 18px;
-                border-radius: 10px;
-                background: #EEF4FF;
-                color: #0F5EFF;
-                text-decoration: none;
-                font-weight: 700;
-              "
-            >
-              Privacy Policy
-            </a>
-          </div>
-
-          <p
-            style="
               margin-top: 28px;
               font-size: 13px;
               line-height: 1.6;
