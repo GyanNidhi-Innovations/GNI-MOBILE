@@ -28,7 +28,7 @@ export default {
       "./assets/images/app-icon-foreground.png",
 
     monochromeImage:
-      "./assets/images/app-icon-foreground.png",
+      "./assets/images/app-icon-monochrome.png",
 
     backgroundColor:
       "#FFFFFF",
