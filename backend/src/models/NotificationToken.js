@@ -5,7 +5,7 @@ const notificationTokenSchema =
     {
       userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Registration",
         required: true,
         index: true,
       },

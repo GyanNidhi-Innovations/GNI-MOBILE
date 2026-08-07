@@ -2,15 +2,26 @@ import mongoose from "mongoose";
 
 import NotificationToken from "../models/NotificationToken.js";
 import Notification from "../models/Notification.js";
+import NotificationCampaign from "../models/NotificationCampaign.js";
 import { admin } from "../config/firebaseAdmin.js";
 
 import {
-  buildUserDeliveryMap,
   dedupeDeviceRecords,
   sendPushToDeviceRecords,
   stringifyNotificationData,
   uniqueUserIdsFromDevices,
 } from "../services/pushNotificationService.js";
+
+import {
+  campaignActorFromRequest,
+  createNotificationCampaign,
+  failCampaignPush,
+  finalizeCampaignWithPushResult,
+  getAnalyticsOverview,
+  getCampaignDetails,
+  listCampaignRecipients,
+  listCampaigns,
+} from "../services/notificationAnalyticsService.js";
 
 function isAuthenticatedUser(
   req,
@@ -38,58 +49,86 @@ function rejectOtherUserAccess(
   });
 }
 
-async function updateInboxDeliveryStatuses(
-  inboxDocuments,
-  deliveryMap,
+const ALLOWED_TYPES =
+  new Set([
+    "event",
+    "course",
+    "reminder",
+    "system",
+    "feedback",
+    "exam",
+    "drive",
+    "offer",
+  ]);
+
+const ALLOWED_SCREENS =
+  new Set([
+    "notifications",
+    "events",
+    "calendar",
+    "courses",
+    "profile",
+  ]);
+
+function cleanNotificationInput(
+  body = {},
 ) {
-  if (!inboxDocuments.length) return;
+  const title =
+    String(
+      body.title || "",
+    )
+      .trim()
+      .slice(0, 200);
 
-  const now = new Date();
+  const message =
+    String(
+      body.body || "",
+    )
+      .trim()
+      .slice(0, 2000);
 
-  const operations =
-    inboxDocuments.map((document) => {
-      const userId = String(
-        document.userId,
-      );
+  const type =
+    ALLOWED_TYPES.has(
+      body.type,
+    )
+      ? body.type
+      : "system";
 
-      const delivery =
-        deliveryMap.get(userId);
+  const suppliedData =
+    body.data &&
+    typeof body.data ===
+      "object" &&
+    !Array.isArray(
+      body.data,
+    )
+      ? body.data
+      : {};
 
-      const delivered =
-        (delivery?.successCount || 0) >
-        0;
+  const screen =
+    ALLOWED_SCREENS.has(
+      suppliedData.screen,
+    )
+      ? suppliedData.screen
+      : "notifications";
 
-      return {
-        updateOne: {
-          filter: {
-            _id: document._id,
-          },
+  return {
+    title,
+    body: message,
+    type,
+    screen,
+    data: {
+      ...suppliedData,
+      screen,
+    },
+  };
+}
 
-          update: {
-            $set: {
-              deliveryStatus: delivered
-                ? "sent"
-                : "failed",
-
-              sentAt: now,
-
-              failureReason:
-                delivered
-                  ? ""
-                  : (
-                      delivery?.errors ||
-                      []
-                    ).join(", ") ||
-                    "Push delivery failed",
-            },
-          },
-        },
-      };
-    });
-
-  await Notification.bulkWrite(
-    operations,
-  );
+function sendResponseStatus(
+  summary,
+) {
+  return summary.successCount > 0
+    ? 200
+    : 502;
 }
 
 export async function registerDeviceToken(
@@ -683,8 +722,8 @@ export async function markNotificationRead(
     }
 
     if (
-      !mongoose.Types.ObjectId
-        .isValid(id)
+      !mongoose.Types
+        .ObjectId.isValid(id)
     ) {
       return res
         .status(400)
@@ -695,29 +734,15 @@ export async function markNotificationRead(
         });
     }
 
-    const updated =
+    const notification =
       await Notification
-        .findOneAndUpdate(
-          {
-            _id: id,
+        .findOne({
+          _id: id,
+          userId:
+            authenticatedUserId,
+        });
 
-            /*
-             * Ownership filter.
-             */
-            userId:
-              authenticatedUserId,
-          },
-          {
-            $set: {
-              read: true,
-            },
-          },
-          {
-            new: true,
-          },
-        );
-
-    if (!updated) {
+    if (!notification) {
       return res
         .status(404)
         .json({
@@ -727,12 +752,19 @@ export async function markNotificationRead(
         });
     }
 
+    if (!notification.read) {
+      notification.read = true;
+      notification.readAt =
+        new Date();
+
+      await notification.save();
+    }
+
     return res
       .status(200)
       .json({
         success: true,
-        notification:
-          updated,
+        notification,
       });
   } catch (error) {
     console.error(
@@ -750,316 +782,558 @@ export async function markNotificationRead(
   }
 }
 
+export async function markNotificationOpenedByCampaign(
+  req,
+  res,
+) {
+  try {
+    const {
+      campaignId,
+    } = req.params;
+
+    const authenticatedUserId =
+      req.auth?.userId;
+
+    if (
+      !authenticatedUserId
+    ) {
+      return res
+        .status(401)
+        .json({
+          success: false,
+          message:
+            "Authentication required",
+        });
+    }
+
+    if (
+      !mongoose.Types
+        .ObjectId.isValid(
+          campaignId,
+        )
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid campaign id",
+        });
+    }
+
+    const notification =
+      await Notification
+        .findOne({
+          campaignId,
+          userId:
+            authenticatedUserId,
+        });
+
+    /*
+     * Topic sends do not create one inbox record
+     * per user. Treat that case as a harmless
+     * no-op so notification navigation is never
+     * blocked.
+     */
+    if (!notification) {
+      const campaign =
+        await NotificationCampaign
+          .findById(
+            campaignId,
+          )
+          .select(
+            "analyticsAvailable targetType",
+          )
+          .lean();
+
+      if (
+        campaign &&
+        !campaign
+          .analyticsAvailable
+      ) {
+        return res
+          .status(200)
+          .json({
+            success: true,
+            tracked: false,
+            reason:
+              "Per-user topic analytics are unavailable",
+          });
+      }
+
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "Notification recipient record not found",
+        });
+    }
+
+    if (
+      !notification.openedAt
+    ) {
+      notification.openedAt =
+        new Date();
+
+      notification.openSource =
+        "system_tray";
+
+      await notification.save();
+    }
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+        tracked: true,
+        notification,
+      });
+  } catch (error) {
+    console.error(
+      "markNotificationOpenedByCampaign error:",
+      error,
+    );
+
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
+  }
+}
+
+
 export async function sendToUser(
   req,
   res,
 ) {
+  let campaign = null;
   let inboxNotification = null;
+  let devices = [];
 
   try {
     const {
       userId,
-      title,
-      body,
-      type = "system",
-      data = {},
     } = req.body;
 
-    const cleanTitle = String(
-      title || "",
-    ).trim();
-
-    const cleanBody = String(
-      body || "",
-    ).trim();
+    const input =
+      cleanNotificationInput(
+        req.body,
+      );
 
     if (
       !userId ||
-      !cleanTitle ||
-      !cleanBody
+      !input.title ||
+      !input.body
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "userId, title and body are required",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "userId, title and body are required",
+        });
     }
 
     if (
-      !mongoose.Types.ObjectId.isValid(
-        userId,
-      )
+      !mongoose.Types
+        .ObjectId.isValid(
+          userId,
+        )
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid userId",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "Invalid userId",
+        });
     }
 
+    campaign =
+      await createNotificationCampaign({
+        source:
+          "general",
+
+        targetType:
+          "user",
+
+        targetValue:
+          String(userId),
+
+        title:
+          input.title,
+
+        body:
+          input.body,
+
+        type:
+          input.type,
+
+        screen:
+          input.screen,
+
+        createdBy:
+          campaignActorFromRequest(
+            req,
+          ),
+      });
+
     const rawDevices =
-      await NotificationToken.find({
-        userId,
-        isActive: true,
-      }).lean();
+      await NotificationToken
+        .find({
+          userId,
+          isActive: true,
+        })
+        .lean();
 
-    const devices =
-      dedupeDeviceRecords(rawDevices);
+    devices =
+      dedupeDeviceRecords(
+        rawDevices,
+      );
 
-    const totalUserDeviceRecords =
-  await NotificationToken
-    .countDocuments({
-      userId,
-    });
+    const inboxData = {
+      ...input.data,
 
-const inactiveUserDeviceRecords =
-  await NotificationToken
-    .countDocuments({
-      userId,
-      isActive: false,
-    });
+      campaignId:
+        String(
+          campaign._id,
+        ),
+    };
 
-console.log(
-  "[PUSH-DEBUG][BACKEND] send-user device state",
-  {
-    database:
-      mongoose.connection.name,
-
-    collection:
-      NotificationToken.collection.name,
-
-    userId,
-
-    totalDeviceRecords:
-      totalUserDeviceRecords,
-
-    activeDeviceRecords:
-      rawDevices.length,
-
-    deduplicatedDevices:
-      devices.length,
-
-    inactiveDeviceRecords:
-      inactiveUserDeviceRecords,
-
-    activeDevices:
-      devices.map(
-        (device) => ({
-          documentId:
-            String(device._id),
-
-          installationId:
-            device.installationId,
-
-          tokenLast10:
-            String(
-              device.token || "",
-            ).slice(-10),
-
-          isActive:
-            device.isActive,
-        }),
-      ),
-  },
-);
-
-
-    /*
-     * Store the Alerts record before Firebase
-     * sends the push.
-     *
-     * When the mobile push listener runs, the
-     * Alerts record already exists.
-     */
     inboxNotification =
       await Notification.create({
         userId,
-        title: cleanTitle,
-        body: cleanBody,
-        type,
-        data,
+
+        campaignId:
+          campaign._id,
+
+        title:
+          input.title,
+
+        body:
+          input.body,
+
+        type:
+          input.type,
+
+        data:
+          inboxData,
+
         deliveryStatus:
           devices.length > 0
             ? "queued"
             : "failed",
+
         read: false,
+
         failureReason:
           devices.length > 0
             ? ""
             : "No active device registrations",
       });
 
-    if (devices.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "No active device registrations found",
-        notification:
-          inboxNotification,
-      });
+    if (
+      devices.length === 0
+    ) {
+      const summary =
+        await failCampaignPush({
+          campaign,
+
+          inboxDocuments: [
+            inboxNotification,
+          ],
+
+          devices: [],
+
+          error:
+            new Error(
+              "No active device registrations found",
+            ),
+        });
+
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "No active device registrations found",
+          ...summary,
+        });
     }
 
     const pushResult =
       await sendPushToDeviceRecords({
-        deviceRecords: devices,
-        title: cleanTitle,
-        body: cleanBody,
+        deviceRecords:
+          devices,
+
+        title:
+          input.title,
+
+        body:
+          input.body,
 
         data: {
-          ...data,
-          type,
-          screen:
-            data.screen ||
-            "notifications",
+          ...inboxData,
+
+          type:
+            input.type,
         },
       });
 
-    const deliveryMap =
-      buildUserDeliveryMap(
-        pushResult.results,
-      );
+    const summary =
+      await finalizeCampaignWithPushResult({
+        campaign,
 
-    await updateInboxDeliveryStatuses(
-      [inboxNotification],
-      deliveryMap,
-    );
+        inboxDocuments: [
+          inboxNotification,
+        ],
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Notification processed",
-      totalDevices:
-        pushResult.uniqueDevices.length,
-      successCount:
-        pushResult.successCount,
-      failureCount:
-        pushResult.failureCount,
-      invalidTokensDisabled:
-        pushResult
-          .invalidTokensDisabled,
-    });
+        pushResult,
+      });
+
+    return res
+      .status(
+        sendResponseStatus(
+          summary,
+        ),
+      )
+      .json({
+        success:
+          summary.successCount >
+          0,
+
+        message:
+          summary.successCount >
+          0
+            ? "Notification processed"
+            : "Firebase rejected every targeted device",
+
+        ...summary,
+      });
   } catch (error) {
     console.error(
       "sendToUser error:",
       error,
     );
 
-    if (inboxNotification?._id) {
-      await Notification.updateOne(
-        {
-          _id: inboxNotification._id,
-        },
-        {
-          $set: {
-            deliveryStatus: "failed",
-            sentAt: new Date(),
-            failureReason:
-              error.message,
-          },
-        },
-      ).catch(() => {});
+    if (campaign?._id) {
+      const summary =
+        await failCampaignPush({
+          campaign,
+
+          inboxDocuments:
+            inboxNotification
+              ? [
+                  inboxNotification,
+                ]
+              : [],
+
+          devices,
+
+          error,
+        }).catch(() => null);
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            error.message,
+          ...(summary || {}),
+        });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
   }
 }
+
 
 export async function sendToTopic(
   req,
   res,
 ) {
+  let campaign = null;
+
   try {
-    const {
-      topic,
-      title,
-      body,
-      type = "system",
-      data = {},
-    } = req.body;
+    const cleanTopic =
+      String(
+        req.body.topic ||
+          "",
+      ).trim();
 
-    const cleanTopic = String(
-      topic || "",
-    ).trim();
-
-    const cleanTitle = String(
-      title || "",
-    ).trim();
-
-    const cleanBody = String(
-      body || "",
-    ).trim();
+    const input =
+      cleanNotificationInput(
+        req.body,
+      );
 
     if (
       !cleanTopic ||
-      !cleanTitle ||
-      !cleanBody
+      !input.title ||
+      !input.body
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "topic, title and body are required",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "topic, title and body are required",
+        });
     }
 
-    const messageId =
-      await admin.messaging().send({
-        topic: cleanTopic,
+    campaign =
+      await createNotificationCampaign({
+        source:
+          "topic",
 
-        notification: {
-          title: cleanTitle,
-          body: cleanBody,
-        },
+        targetType:
+          "topic",
 
-        data:
-          stringifyNotificationData({
-            ...data,
-            type,
-            screen:
-              data.screen ||
-              "notifications",
-          }),
+        targetValue:
+          cleanTopic,
 
-        android: {
-          priority: "high",
+        title:
+          input.title,
 
-          notification: {
-            channelId: "default",
-            sound: "default",
-          },
-        },
+        body:
+          input.body,
 
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-            },
-          },
-        },
+        type:
+          input.type,
+
+        screen:
+          input.screen,
+
+        analyticsAvailable:
+          false,
+
+        createdBy:
+          campaignActorFromRequest(
+            req,
+          ),
       });
 
-    /*
-     * A topic push is push-only here because this
-     * backend currently does not store a database
-     * list of topic members.
-     */
-    return res.status(200).json({
-      success: true,
-      messageId,
-    });
+    const messageId =
+      await admin
+        .messaging()
+        .send({
+          topic:
+            cleanTopic,
+
+          notification: {
+            title:
+              input.title,
+
+            body:
+              input.body,
+          },
+
+          data:
+            stringifyNotificationData({
+              ...input.data,
+
+              type:
+                input.type,
+
+              campaignId:
+                String(
+                  campaign._id,
+                ),
+            }),
+
+          android: {
+            priority:
+              "high",
+
+            notification: {
+              channelId:
+                "default",
+
+              sound:
+                "default",
+            },
+          },
+
+          apns: {
+            payload: {
+              aps: {
+                sound:
+                  "default",
+              },
+            },
+          },
+        });
+
+    campaign.status =
+      "completed";
+    campaign.topicMessageId =
+      messageId;
+    campaign.completedAt =
+      new Date();
+
+    await campaign.save();
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message:
+          "Topic notification was accepted by FCM",
+        campaignId:
+          String(
+            campaign._id,
+          ),
+        messageId,
+        analyticsAvailable:
+          false,
+      });
   } catch (error) {
     console.error(
       "sendToTopic error:",
       error,
     );
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    if (campaign?._id) {
+      campaign.status =
+        "failed";
+      campaign.failureReason =
+        String(
+          error.message ||
+            error,
+        );
+      campaign.completedAt =
+        new Date();
+
+      await campaign
+        .save()
+        .catch(() => {});
+    }
+
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+        campaignId:
+          campaign?._id
+            ? String(
+                campaign._id,
+              )
+            : null,
+      });
   }
 }
+
 
 export async function getUnreadCount(
   req,
@@ -1122,75 +1396,97 @@ export async function getUnreadCount(
       });
   }
 }
+
 export async function sendToAllUsers(
   req,
   res,
 ) {
+  let campaign = null;
   let inboxDocuments = [];
+  let devices = [];
 
   try {
-    const {
-      title,
-      body,
-      type = "system",
-      data = {},
-    } = req.body;
+    const input =
+      cleanNotificationInput(
+        req.body,
+      );
 
-    const cleanTitle = String(
-      title || "",
-    ).trim();
-
-    const cleanBody = String(
-      body || "",
-    ).trim();
-
-    if (!cleanTitle || !cleanBody) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "title and body are required",
-      });
+    if (
+      !input.title ||
+      !input.body
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "title and body are required",
+        });
     }
 
-    const rawDevices =
-      await NotificationToken.find({
-        isActive: true,
-      }).lean();
+    campaign =
+      await createNotificationCampaign({
+        source:
+          "general",
 
+        targetType:
+          "all",
 
-      const totalDeviceRecords =
-  await NotificationToken.countDocuments(
-    {},
-  );
+        title:
+          input.title,
 
-const inactiveDeviceRecords =
-  await NotificationToken.countDocuments({
-    isActive: false,
-  });
+        body:
+          input.body,
 
-console.log(
-  "[PUSH-DEBUG][BACKEND] send-all device state",
-  {
-    database:
-      mongoose.connection.name,
-    collection:
-      NotificationToken.collection.name,
-    totalDeviceRecords,
-    activeDeviceRecords:
-      rawDevices.length,
-    inactiveDeviceRecords,
-  },
-);
+        type:
+          input.type,
 
-    const devices =
-      dedupeDeviceRecords(rawDevices);
+        screen:
+          input.screen,
 
-    if (devices.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "No active notification devices found",
+        createdBy:
+          campaignActorFromRequest(
+            req,
+          ),
       });
+
+    const rawDevices =
+      await NotificationToken
+        .find({
+          isActive: true,
+        })
+        .lean();
+
+    devices =
+      dedupeDeviceRecords(
+        rawDevices,
+      );
+
+    if (
+      devices.length === 0
+    ) {
+      const summary =
+        await failCampaignPush({
+          campaign,
+
+          inboxDocuments: [],
+
+          devices: [],
+
+          error:
+            new Error(
+              "No active notification devices found",
+            ),
+        });
+
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "No active notification devices found",
+          ...summary,
+        });
     }
 
     const uniqueUserIds =
@@ -1198,150 +1494,262 @@ console.log(
         devices,
       );
 
-    /*
-     * One Alerts record per user.
-     *
-     * Store these records before sending FCM so
-     * the mobile received-listener can immediately
-     * retrieve them.
-     */
-    inboxDocuments =
-      await Notification.insertMany(
-        uniqueUserIds.map(
-          (userId) => ({
-            userId,
-            title: cleanTitle,
-            body: cleanBody,
-            type,
-            data,
-            deliveryStatus: "queued",
-            read: false,
-          }),
-        ),
+    const campaignId =
+      String(
+        campaign._id,
       );
 
-    /*
-     * One FCM push per unique device token.
-     */
+    const inboxData = {
+      ...input.data,
+      campaignId,
+    };
+
+    inboxDocuments =
+      await Notification
+        .insertMany(
+          uniqueUserIds.map(
+            (userId) => ({
+              userId,
+
+              campaignId:
+                campaign._id,
+
+              title:
+                input.title,
+
+              body:
+                input.body,
+
+              type:
+                input.type,
+
+              data:
+                inboxData,
+
+              deliveryStatus:
+                "queued",
+
+              read: false,
+            }),
+          ),
+        );
+
     const pushResult =
       await sendPushToDeviceRecords({
-        deviceRecords: devices,
-        title: cleanTitle,
-        body: cleanBody,
+        deviceRecords:
+          devices,
+
+        title:
+          input.title,
+
+        body:
+          input.body,
 
         data: {
-          ...data,
-          type,
-          screen:
-            data.screen ||
-            "notifications",
+          ...inboxData,
+
+          type:
+            input.type,
         },
       });
 
-      console.log(
-  "[PUSH-DEBUG][BACKEND] send-all Firebase result",
-  {
-    totalUniqueDevices:
-      pushResult.uniqueDevices.length,
+    const summary =
+      await finalizeCampaignWithPushResult({
+        campaign,
+        inboxDocuments,
+        pushResult,
+      });
 
-    successCount:
-      pushResult.successCount,
+    return res
+      .status(
+        sendResponseStatus(
+          summary,
+        ),
+      )
+      .json({
+        success:
+          summary.successCount >
+          0,
 
-    failureCount:
-      pushResult.failureCount,
+        message:
+          summary.successCount >
+          0
+            ? "Notification processed for all active users"
+            : "Firebase rejected every targeted device",
 
-    invalidTokensDisabled:
-      pushResult
-        .invalidTokensDisabled,
-
-    deviceResults:
-      pushResult.results.map(
-        (result) => ({
-          userId:
-            result.userId,
-
-          installationId:
-            result.installationId,
-
-          tokenLast10:
-            String(
-              result.token || "",
-            ).slice(-10),
-
-          success:
-            result.success,
-
-          errorCode:
-            result.errorCode,
-
-          errorMessage:
-            result.errorMessage,
-        }),
-      ),
-  },
-);
-
-    const deliveryMap =
-      buildUserDeliveryMap(
-        pushResult.results,
-      );
-
-    await updateInboxDeliveryStatuses(
-      inboxDocuments,
-      deliveryMap,
-    );
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Notification sent to all users",
-
-      totalUsers:
-        uniqueUserIds.length,
-
-      totalDevices:
-        pushResult.uniqueDevices.length,
-
-      successCount:
-        pushResult.successCount,
-
-      failureCount:
-        pushResult.failureCount,
-
-      invalidTokensDisabled:
-        pushResult
-          .invalidTokensDisabled,
-    });
+        ...summary,
+      });
   } catch (error) {
     console.error(
       "sendToAllUsers error:",
       error,
     );
 
-    if (inboxDocuments.length > 0) {
-      await Notification.updateMany(
-        {
-          _id: {
-            $in: inboxDocuments.map(
-              (document) =>
-                document._id,
-            ),
-          },
-        },
-        {
-          $set: {
-            deliveryStatus: "failed",
-            sentAt: new Date(),
-            failureReason:
-              error.message,
-          },
-        },
-      ).catch(() => {});
+    if (campaign?._id) {
+      const summary =
+        await failCampaignPush({
+          campaign,
+          inboxDocuments,
+          devices,
+          error,
+        }).catch(() => null);
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            error.message,
+          ...(summary || {}),
+        });
     }
+
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          error.message,
+      });
+  }
+}
+
+
+export async function getNotificationAnalyticsOverview(
+  req,
+  res,
+) {
+  try {
+    const overview =
+      await getAnalyticsOverview(
+        req.query,
+      );
+
+    return res.status(200).json({
+      success: true,
+      overview,
+    });
+  } catch (error) {
+    console.error(
+      "getNotificationAnalyticsOverview error:",
+      error,
+    );
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function getNotificationCampaigns(
+  req,
+  res,
+) {
+  try {
+    const result =
+      await listCampaigns({
+        query:
+          req.query,
+      });
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error(
+      "getNotificationCampaigns error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function getNotificationCampaign(
+  req,
+  res,
+) {
+  try {
+    const campaign =
+      await getCampaignDetails(
+        req.params
+          .campaignId,
+      );
+
+    if (!campaign) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "Notification campaign not found",
+        });
+    }
+
+    return res.status(200).json({
+      success: true,
+      campaign,
+    });
+  } catch (error) {
+    console.error(
+      "getNotificationCampaign error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function getNotificationCampaignRecipients(
+  req,
+  res,
+) {
+  try {
+    const result =
+      await listCampaignRecipients({
+        campaignId:
+          req.params
+            .campaignId,
+
+        query:
+          req.query,
+      });
+
+    if (!result) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "Notification campaign not found",
+        });
+    }
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error(
+      "getNotificationCampaignRecipients error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message,
     });
   }
 }
