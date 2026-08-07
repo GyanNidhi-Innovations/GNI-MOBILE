@@ -546,50 +546,117 @@ function escapeRegex(value) {
   );
 }
 
-function dateRangeFilter(query = {}) {
-  const createdAt = {};
+const IST_OFFSET_MS =
+  330 * 60 * 1000;
 
-  if (query.from) {
-    const from =
-      new Date(query.from);
-
-    if (
-      !Number.isNaN(
-        from.getTime(),
-      )
-    ) {
-      createdAt.$gte = from;
-    }
+function parseAnalyticsDate(
+  value,
+  {
+    endOfDay = false,
+  } = {},
+) {
+  if (!value) {
+    return null;
   }
 
-  if (query.to) {
-    const to =
-      new Date(query.to);
+  const stringValue =
+    String(value);
 
-    if (
-      !Number.isNaN(
-        to.getTime(),
-      )
-    ) {
-      /*
-       * Date-only values include the complete
-       * selected day.
-       */
-      if (
-        /^\d{4}-\d{2}-\d{2}$/.test(
-          String(query.to),
-        )
-      ) {
-        to.setHours(
-          23,
-          59,
-          59,
-          999,
-        );
-      }
+  const dateOnlyMatch =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+      stringValue,
+    );
 
-      createdAt.$lte = to;
-    }
+  if (dateOnlyMatch) {
+    const year =
+      Number(
+        dateOnlyMatch[1],
+      );
+
+    const month =
+      Number(
+        dateOnlyMatch[2],
+      );
+
+    const day =
+      Number(
+        dateOnlyMatch[3],
+      );
+
+    const utcTime =
+      endOfDay
+        ? Date.UTC(
+            year,
+            month - 1,
+            day,
+            23,
+            59,
+            59,
+            999,
+          )
+        : Date.UTC(
+            year,
+            month - 1,
+            day,
+            0,
+            0,
+            0,
+            0,
+          );
+
+    /*
+     * Convert selected IST date/time
+     * to the real UTC instant.
+     */
+    return new Date(
+      utcTime -
+        IST_OFFSET_MS,
+    );
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function dateRangeFilter(
+  query = {},
+) {
+  const createdAt = {};
+
+  const from =
+    parseAnalyticsDate(
+      query.from,
+      {
+        endOfDay: false,
+      },
+    );
+
+  const to =
+    parseAnalyticsDate(
+      query.to,
+      {
+        endOfDay: true,
+      },
+    );
+
+  if (from) {
+    createdAt.$gte =
+      from;
+  }
+
+  if (to) {
+    createdAt.$lte =
+      to;
   }
 
   return Object.keys(
@@ -1157,10 +1224,12 @@ export async function getAnalyticsOverview(
 function normalizeTrendDays(
   value,
 ) {
-  const days = Number(value);
+  const days =
+    Number(value);
 
   if (
     [
+      1,
       7,
       30,
       90,
@@ -1172,7 +1241,7 @@ function normalizeTrendDays(
   return 30;
 }
 
-function analyticsDayKey(
+function shiftToIst(
   value,
 ) {
   const date =
@@ -1183,50 +1252,75 @@ function analyticsDayKey(
       date.getTime(),
     )
   ) {
-    return "";
+    return null;
   }
 
-  /*
-   * The product currently operates in IST.
-   * India has no daylight-saving transitions,
-   * so +05:30 gives stable reporting-day keys.
-   */
-  const shifted =
-    new Date(
-      date.getTime() +
-        330 * 60 * 1000,
-    );
+  return new Date(
+    date.getTime() +
+      IST_OFFSET_MS,
+  );
+}
 
-  return shifted
-    .toISOString()
-    .slice(0, 10);
+function pad2(value) {
+  return String(value).padStart(
+    2,
+    "0",
+  );
+}
+
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function dayKeyFromShifted(
+  date,
+) {
+  return [
+    date.getUTCFullYear(),
+    pad2(
+      date.getUTCMonth() +
+        1,
+    ),
+    pad2(
+      date.getUTCDate(),
+    ),
+  ].join("-");
 }
 
 function beginningOfTrendRange(
   days,
 ) {
-  const now = new Date();
-  const shifted =
-    new Date(
-      now.getTime() +
-        330 * 60 * 1000,
+  const shiftedNow =
+    shiftToIst(
+      new Date(),
     );
 
-  shifted.setUTCHours(
+  shiftedNow.setUTCHours(
     0,
     0,
     0,
     0,
   );
 
-  shifted.setUTCDate(
-    shifted.getUTCDate() -
+  shiftedNow.setUTCDate(
+    shiftedNow.getUTCDate() -
       (days - 1),
   );
 
   return new Date(
-    shifted.getTime() -
-      330 * 60 * 1000,
+    shiftedNow.getTime() -
+      IST_OFFSET_MS,
   );
 }
 
@@ -1235,42 +1329,200 @@ function trendRangeBounds(
   days,
 ) {
   const explicit =
-    dateRangeFilter(query);
+    dateRangeFilter(
+      query,
+    );
 
-  if (explicit) {
+  return {
+    from:
+      explicit?.$gte ||
+      beginningOfTrendRange(
+        days,
+      ),
+
+    to:
+      explicit?.$lte ||
+      new Date(),
+  };
+}
+
+function resolveTrendGroupBy(
+  requested,
+  bounds,
+) {
+  if (
+    [
+      "day",
+      "week",
+      "month",
+    ].includes(
+      requested,
+    )
+  ) {
+    return requested;
+  }
+
+  const totalDays =
+    Math.max(
+      1,
+      Math.ceil(
+        (
+          bounds.to.getTime() -
+          bounds.from.getTime()
+        ) /
+          (
+            24 *
+            60 *
+            60 *
+            1000
+          ),
+      ) + 1,
+    );
+
+  /*
+   * Automatic grouping:
+   *
+   * <= 31 days  -> Daily
+   * <= 120 days -> Weekly
+   * > 120 days  -> Monthly
+   */
+  if (totalDays <= 31) {
+    return "day";
+  }
+
+  if (totalDays <= 120) {
+    return "week";
+  }
+
+  return "month";
+}
+
+function periodInfo(
+  value,
+  groupBy,
+) {
+  const shifted =
+    shiftToIst(
+      value,
+    );
+
+  if (!shifted) {
+    return null;
+  }
+
+  const year =
+    shifted.getUTCFullYear();
+
+  const month =
+    shifted.getUTCMonth();
+
+  const day =
+    shifted.getUTCDate();
+
+  if (
+    groupBy === "month"
+  ) {
     return {
-      from:
-        explicit.$gte ||
-        beginningOfTrendRange(
-          days,
+      period:
+        `${year}-${pad2(
+          month + 1,
+        )}`,
+
+      label:
+        `${MONTH_NAMES[month]} ${year}`,
+    };
+  }
+
+  if (
+    groupBy === "week"
+  ) {
+    const monday =
+      new Date(
+        shifted,
+      );
+
+    const weekday =
+      (
+        monday.getUTCDay() +
+        6
+      ) % 7;
+
+    monday.setUTCDate(
+      monday.getUTCDate() -
+        weekday,
+    );
+
+    const sunday =
+      new Date(
+        monday,
+      );
+
+    sunday.setUTCDate(
+      sunday.getUTCDate() +
+        6,
+    );
+
+    return {
+      period:
+        dayKeyFromShifted(
+          monday,
         ),
 
-      to:
-        explicit.$lte ||
-        new Date(),
+      label:
+        `${pad2(
+          monday.getUTCDate(),
+        )} ${
+          MONTH_NAMES[
+            monday.getUTCMonth()
+          ]
+        } – ${pad2(
+          sunday.getUTCDate(),
+        )} ${
+          MONTH_NAMES[
+            sunday.getUTCMonth()
+          ]
+        }`,
     };
   }
 
   return {
-    from:
-      beginningOfTrendRange(
-        days,
-      ),
-    to: new Date(),
+    period:
+      `${year}-${pad2(
+        month + 1,
+      )}-${pad2(day)}`,
+
+    label:
+      `${pad2(day)} ${
+        MONTH_NAMES[month]
+      }`,
   };
 }
 
 function emptyTrendRow(
-  date,
+  period,
+  label,
 ) {
   return {
-    date,
+    period,
+    label,
+
+    /*
+     * Keep date for temporary
+     * frontend compatibility.
+     */
+    date: period,
+
     notificationsSent: 0,
     recipientSends: 0,
+
     deviceSends: 0,
+
     acceptedByFcm: 0,
+
     failed: 0,
+
     notificationOpens: 0,
+
     alertsRead: 0,
   };
 }
@@ -1289,20 +1541,32 @@ export async function getAnalyticsTrend(
       days,
     );
 
-  const filter =
-    buildCampaignFilter(
-      {
-        ...query,
-        from:
-          bounds.from,
-        to:
-          bounds.to,
-      },
+  const groupBy =
+    resolveTrendGroupBy(
+      String(
+        query.groupBy ||
+          "auto",
+      ),
+      bounds,
     );
 
+  const filter =
+    buildCampaignFilter({
+      ...query,
+
+      from:
+        bounds.from,
+
+      to:
+        bounds.to,
+    });
+
   filter.createdAt = {
-    $gte: bounds.from,
-    $lte: bounds.to,
+    $gte:
+      bounds.from,
+
+    $lte:
+      bounds.to,
   };
 
   const campaigns =
@@ -1324,24 +1588,40 @@ export async function getAnalyticsTrend(
       ),
     );
 
-  const rows = new Map();
+  const rows =
+    new Map();
 
+  /*
+   * Pre-create empty periods so
+   * days/weeks/months with zero sends
+   * still appear in charts.
+   */
   let cursor =
-    new Date(bounds.from);
+    new Date(
+      bounds.from,
+    );
 
   while (
-    cursor <= bounds.to
+    cursor <=
+    bounds.to
   ) {
-    const key =
-      analyticsDayKey(
+    const info =
+      periodInfo(
         cursor,
+        groupBy,
       );
 
-    if (key) {
+    if (
+      info &&
+      !rows.has(
+        info.period,
+      )
+    ) {
       rows.set(
-        key,
+        info.period,
         emptyTrendRow(
-          key,
+          info.period,
+          info.label,
         ),
       );
     }
@@ -1358,26 +1638,34 @@ export async function getAnalyticsTrend(
 
   campaigns.forEach(
     (campaign) => {
-      const key =
-        analyticsDayKey(
+      const info =
+        periodInfo(
           campaign.createdAt,
+          groupBy,
         );
 
-      if (!key) {
+      if (!info) {
         return;
       }
 
-      if (!rows.has(key)) {
+      if (
+        !rows.has(
+          info.period,
+        )
+      ) {
         rows.set(
-          key,
+          info.period,
           emptyTrendRow(
-            key,
+            info.period,
+            info.label,
           ),
         );
       }
 
       const row =
-        rows.get(key);
+        rows.get(
+          info.period,
+        );
 
       const dynamic =
         metricsMap.get(
@@ -1386,7 +1674,8 @@ export async function getAnalyticsTrend(
           ),
         );
 
-      row.notificationsSent += 1;
+      row.notificationsSent +=
+        1;
 
       row.recipientSends +=
         dynamic
@@ -1394,7 +1683,8 @@ export async function getAnalyticsTrend(
         0;
 
       row.deviceSends +=
-        campaign.totalDevices ||
+        campaign
+          .totalDevices ||
         0;
 
       row.acceptedByFcm +=
@@ -1408,28 +1698,49 @@ export async function getAnalyticsTrend(
         0;
 
       row.notificationOpens +=
-        dynamic?.openedUsers ||
+        dynamic
+          ?.openedUsers ||
         0;
 
       row.alertsRead +=
-        dynamic?.readUsers ||
+        dynamic
+          ?.readUsers ||
         0;
     },
   );
 
   return {
     days,
-    from: bounds.from,
-    to: bounds.to,
+
+    requestedGroupBy:
+      String(
+        query.groupBy ||
+          "auto",
+      ),
+
+    groupBy,
+
+    from:
+      bounds.from,
+
+    to:
+      bounds.to,
+
     trend:
       Array.from(
         rows.values(),
       ).sort(
-        (a, b) =>
-          String(a.date)
-            .localeCompare(
-              String(b.date),
+        (
+          first,
+          second,
+        ) =>
+          String(
+            first.period,
+          ).localeCompare(
+            String(
+              second.period,
             ),
+          ),
       ),
   };
 }
