@@ -472,3 +472,28 @@ export async function getUnreadNotificationCount(
     `/notifications/unread/${userId}`,
   );
 }
+
+export async function markNotificationCampaignOpened(
+  campaignId,
+) {
+  const cleanCampaignId = String(
+    campaignId || "",
+  ).trim();
+
+  if (!cleanCampaignId) {
+    return {
+      success: true,
+      tracked: false,
+      reason: "No campaign id was supplied",
+    };
+  }
+
+  return await apiClient(
+    `/notifications/campaigns/${encodeURIComponent(
+      cleanCampaignId,
+    )}/opened`,
+    {
+      method: "PATCH",
+    },
+  );
+}

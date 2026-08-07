@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { Tabs, useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,6 +9,7 @@ import {
   registerForFcmNotifications,
   subscribeToPushTokenChanges,
   getUnreadNotificationCount,
+  markNotificationCampaignOpened,
 } from "@/services/notificationService";
 
 import { COLORS } from "@/theme";
@@ -22,6 +23,9 @@ export default function ProtectedLayout() {
   // const hasRegistered = useRef(false);
   const safeBottom = Math.max(insets.bottom, 12);
   const tabBarHeight = 68 + safeBottom;
+
+  const handledNotificationResponsesRef =
+    useRef(new Set());
 
   const unreadCount = useAuthStore(
     (state) => state.unreadNotificationCount
@@ -65,43 +69,158 @@ export default function ProtectedLayout() {
   useEffect(() => {
   if (!userId) return undefined;
 
- console.log(
-  "[PUSH-DEBUG][LAYOUT] Notification effect running",
-  {
-    userId,
-    hasUserId: Boolean(userId),
-  },
-);
+  console.log(
+    "[PUSH-DEBUG][LAYOUT] Notification effect running",
+    {
+      userId,
+      hasUserId: Boolean(userId),
+    },
+  );
 
-registerForFcmNotifications(userId)
-  .then((result) => {
-    console.log(
-      "[PUSH-DEBUG][LAYOUT] Registration successful",
-      {
-        userId,
-        installationId:
-          result?.installationId,
-        tokenLast10:
-          result?.nativeToken?.slice(-10),
-        backendSuccess:
-          result?.response?.success,
-        backendIsActive:
-          result?.response?.device
-            ?.isActive,
-      },
-    );
-  })
-  .catch((error) => {
-    console.log(
-      "[PUSH-DEBUG][LAYOUT] Registration failed",
-      {
-        userId,
-        message:
-          error?.message ||
-          String(error),
-      },
-    );
-  });
+  registerForFcmNotifications(userId)
+    .then((result) => {
+      console.log(
+        "[PUSH-DEBUG][LAYOUT] Registration successful",
+        {
+          userId,
+          installationId:
+            result?.installationId,
+          tokenLast10:
+            result?.nativeToken?.slice(-10),
+          backendSuccess:
+            result?.response?.success,
+          backendIsActive:
+            result?.response?.device
+              ?.isActive,
+        },
+      );
+    })
+    .catch((error) => {
+      console.log(
+        "[PUSH-DEBUG][LAYOUT] Registration failed",
+        {
+          userId,
+          message:
+            error?.message ||
+            String(error),
+        },
+      );
+    });
+
+  const openNotificationDestination =
+    (data = {}) => {
+      switch (data.screen) {
+        case "events":
+          if (data.eventId) {
+            router.push({
+              pathname:
+                "/(protected)/events/[id]",
+
+              params: {
+                id:
+                  String(
+                    data.eventId,
+                  ),
+
+                source:
+                  "notification",
+              },
+            });
+          } else {
+            router.push(
+              "/(protected)/events",
+            );
+          }
+          break;
+
+        case "courses":
+          router.push(
+            "/(protected)/courses",
+          );
+          break;
+
+        case "calendar":
+          router.push(
+            "/(protected)/calendar",
+          );
+          break;
+
+        case "profile":
+          router.push(
+            "/(protected)/profile",
+          );
+          break;
+
+        case "notifications":
+        default:
+          router.push(
+            "/(protected)/notifications",
+          );
+          break;
+      }
+    };
+
+  const handleNotificationResponse =
+    async (response) => {
+      const request =
+        response?.notification
+          ?.request;
+
+      const responseKey =
+        String(
+          request?.identifier ||
+            response?.actionIdentifier ||
+            "",
+        );
+
+      if (
+        responseKey &&
+        handledNotificationResponsesRef
+          .current
+          .has(responseKey)
+      ) {
+        return;
+      }
+
+      if (responseKey) {
+        handledNotificationResponsesRef
+          .current
+          .add(responseKey);
+      }
+
+      const data =
+        request?.content?.data ||
+        {};
+
+      const campaignId =
+        String(
+          data.campaignId ||
+            "",
+        ).trim();
+
+      if (campaignId) {
+        try {
+          await markNotificationCampaignOpened(
+            campaignId,
+          );
+        } catch (error) {
+          /*
+           * Opening the intended screen is more
+           * important than analytics reporting.
+           */
+          console.log(
+            "mark notification opened error:",
+            error?.message || error,
+          );
+        }
+      }
+
+      openNotificationDestination(
+        data,
+      );
+
+      refreshUnreadCount();
+    };
 
   const pushTokenSubscription =
     subscribeToPushTokenChanges(
@@ -112,76 +231,35 @@ registerForFcmNotifications(userId)
     Notifications
       .addNotificationReceivedListener(
         () => {
-          /*
-           * Read the exact unread count from the
-           * server instead of assuming +1.
-           */
           refreshUnreadCount();
         },
       );
 
   const responseSubscription =
-  Notifications
-    .addNotificationResponseReceivedListener(
-      (response) => {
-        const data =
-          response
-            ?.notification
-            ?.request
-            ?.content
-            ?.data || {};
+    Notifications
+      .addNotificationResponseReceivedListener(
+        (response) => {
+          void handleNotificationResponse(
+            response,
+          );
+        },
+      );
 
-        switch (data.screen) {
-          case "events":
-            if (data.eventId) {
-              router.push({
-                pathname:
-                  "/(protected)/events/[id]",
+  const initialResponse =
+    Notifications
+      .getLastNotificationResponse();
 
-                params: {
-                  id:
-                    String(
-                      data.eventId,
-                    ),
-
-                  source:
-                    "notification",
-                },
-              });
-            } else {
-              router.push(
-                "/(protected)/events",
-              );
-            }
-            break;
-
-          case "courses":
-            router.push(
-              "/(protected)/courses",
-            );
-            break;
-
-          case "calendar":
-            router.push(
-              "/(protected)/calendar",
-            );
-            break;
-
-          case "profile":
-            router.push(
-              "/(protected)/profile",
-            );
-            break;
-
-          case "notifications":
-          default:
-            router.push(
-              "/(protected)/notifications",
-            );
-            break;
-        }
-      },
-    );
+  if (
+    initialResponse
+      ?.notification
+  ) {
+    void handleNotificationResponse(
+      initialResponse,
+    ).finally(() => {
+      Notifications
+        .clearLastNotificationResponse();
+    });
+  }
 
   return () => {
     pushTokenSubscription.remove();
