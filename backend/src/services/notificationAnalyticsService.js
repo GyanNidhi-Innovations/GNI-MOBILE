@@ -805,24 +805,515 @@ function attachDynamicMetrics(
   };
 }
 
+function metricRate(
+  numerator,
+  denominator,
+) {
+  const total = Number(
+    denominator || 0,
+  );
+
+  if (total <= 0) {
+    return 0;
+  }
+
+  return Number(
+    (
+      (Number(numerator || 0) /
+        total) *
+      100
+    ).toFixed(1),
+  );
+}
+
+async function crossCampaignMetrics(
+  campaignIds,
+) {
+  if (
+    campaignIds.length === 0
+  ) {
+    return {
+      uniqueRecipients: 0,
+      recipientSends: 0,
+      uniqueDevices: 0,
+      deviceSends: 0,
+      acceptedByFcm: 0,
+      failedDeviceSends: 0,
+      notificationOpens: 0,
+      uniqueOpeners: 0,
+      alertsRead: 0,
+      uniqueReaders: 0,
+      alertsUnread: 0,
+    };
+  }
+
+  const notificationFilter = {
+    campaignId: {
+      $in: campaignIds,
+    },
+  };
+
+  const deliveryFilter = {
+    campaignId: {
+      $in: campaignIds,
+    },
+  };
+
+  const [
+    uniqueRecipientIds,
+    recipientSends,
+    notificationOpens,
+    uniqueOpenerIds,
+    alertsRead,
+    uniqueReaderIds,
+    alertsUnread,
+    uniqueInstallationIds,
+    deviceSends,
+    acceptedByFcm,
+    failedDeviceSends,
+  ] = await Promise.all([
+    Notification.distinct(
+      "userId",
+      notificationFilter,
+    ),
+
+    Notification.countDocuments(
+      notificationFilter,
+    ),
+
+    Notification.countDocuments({
+      ...notificationFilter,
+      openedAt: {
+        $ne: null,
+      },
+    }),
+
+    Notification.distinct(
+      "userId",
+      {
+        ...notificationFilter,
+        openedAt: {
+          $ne: null,
+        },
+      },
+    ),
+
+    Notification.countDocuments({
+      ...notificationFilter,
+      read: true,
+    }),
+
+    Notification.distinct(
+      "userId",
+      {
+        ...notificationFilter,
+        read: true,
+      },
+    ),
+
+    Notification.countDocuments({
+      ...notificationFilter,
+      read: false,
+    }),
+
+    NotificationDelivery.distinct(
+      "installationId",
+      {
+        ...deliveryFilter,
+        installationId: {
+          $nin: [
+            "",
+            null,
+          ],
+        },
+      },
+    ),
+
+    NotificationDelivery.countDocuments(
+      deliveryFilter,
+    ),
+
+    NotificationDelivery.countDocuments({
+      ...deliveryFilter,
+      fcmStatus:
+        "accepted",
+    }),
+
+    NotificationDelivery.countDocuments({
+      ...deliveryFilter,
+      fcmStatus:
+        "rejected",
+    }),
+  ]);
+
+  return {
+    uniqueRecipients:
+      uniqueRecipientIds.filter(
+        Boolean,
+      ).length,
+
+    recipientSends,
+
+    uniqueDevices:
+      uniqueInstallationIds.filter(
+        Boolean,
+      ).length,
+
+    deviceSends,
+    acceptedByFcm,
+    failedDeviceSends,
+    notificationOpens,
+
+    uniqueOpeners:
+      uniqueOpenerIds.filter(
+        Boolean,
+      ).length,
+
+    alertsRead,
+
+    uniqueReaders:
+      uniqueReaderIds.filter(
+        Boolean,
+      ).length,
+
+    alertsUnread,
+  };
+}
+
 export async function getAnalyticsOverview(
   query = {},
 ) {
   const filter =
     buildCampaignFilter(
       query,
-      {
-        includeSearch:
-          false,
-      },
     );
 
   const campaigns =
     await NotificationCampaign
       .find(filter)
       .select(
-        "_id totalUsers totalDevices acceptedDevices rejectedDevices status",
+        "_id source status analyticsAvailable",
       )
+      .lean();
+
+  const campaignIds =
+    campaigns.map(
+      (campaign) =>
+        campaign._id,
+    );
+
+  const exact =
+    await crossCampaignMetrics(
+      campaignIds,
+    );
+
+  const statusBreakdown = {
+    completed: 0,
+    partial: 0,
+    failed: 0,
+    processing: 0,
+  };
+
+  const sourceBreakdown = {
+    general: 0,
+    event: 0,
+    topic: 0,
+  };
+
+  let topicReports = 0;
+
+  campaigns.forEach(
+    (campaign) => {
+      if (
+        statusBreakdown[
+          campaign.status
+        ] !== undefined
+      ) {
+        statusBreakdown[
+          campaign.status
+        ] += 1;
+      }
+
+      if (
+        sourceBreakdown[
+          campaign.source
+        ] !== undefined
+      ) {
+        sourceBreakdown[
+          campaign.source
+        ] += 1;
+      }
+
+      if (
+        campaign.analyticsAvailable ===
+        false
+      ) {
+        topicReports += 1;
+      }
+    },
+  );
+
+  const overview = {
+    totalCampaigns:
+      campaigns.length,
+
+    uniqueRecipients:
+      exact.uniqueRecipients,
+
+    recipientSends:
+      exact.recipientSends,
+
+    uniqueDevices:
+      exact.uniqueDevices,
+
+    deviceSends:
+      exact.deviceSends,
+
+    acceptedByFcm:
+      exact.acceptedByFcm,
+
+    failedDeviceSends:
+      exact.failedDeviceSends,
+
+    notificationOpens:
+      exact.notificationOpens,
+
+    uniqueOpeners:
+      exact.uniqueOpeners,
+
+    alertsRead:
+      exact.alertsRead,
+
+    uniqueReaders:
+      exact.uniqueReaders,
+
+    alertsUnread:
+      exact.alertsUnread,
+
+    deliveryAcceptanceRate:
+      metricRate(
+        exact.acceptedByFcm,
+        exact.deviceSends,
+      ),
+
+    notificationOpenRate:
+      metricRate(
+        exact.notificationOpens,
+        exact.recipientSends,
+      ),
+
+    alertsReadRate:
+      metricRate(
+        exact.alertsRead,
+        exact.recipientSends,
+      ),
+
+    topicReports,
+    statusBreakdown,
+    sourceBreakdown,
+
+    /*
+     * Backward-compatible aliases for the first
+     * Notification Insights frontend.
+     *
+     * IMPORTANT: these are send/recipient record
+     * totals across campaigns, not unique people
+     * or unique devices.
+     */
+    totalUsers:
+      exact.recipientSends,
+
+    totalDevices:
+      exact.deviceSends,
+
+    acceptedDevices:
+      exact.acceptedByFcm,
+
+    rejectedDevices:
+      exact.failedDeviceSends,
+
+    openedUsers:
+      exact.notificationOpens,
+
+    readUsers:
+      exact.alertsRead,
+
+    unreadUsers:
+      exact.alertsUnread,
+
+    completedCampaigns:
+      statusBreakdown.completed,
+
+    partialCampaigns:
+      statusBreakdown.partial,
+
+    failedCampaigns:
+      statusBreakdown.failed,
+  };
+
+  return overview;
+}
+
+function normalizeTrendDays(
+  value,
+) {
+  const days = Number(value);
+
+  if (
+    [
+      7,
+      30,
+      90,
+    ].includes(days)
+  ) {
+    return days;
+  }
+
+  return 30;
+}
+
+function analyticsDayKey(
+  value,
+) {
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return "";
+  }
+
+  /*
+   * The product currently operates in IST.
+   * India has no daylight-saving transitions,
+   * so +05:30 gives stable reporting-day keys.
+   */
+  const shifted =
+    new Date(
+      date.getTime() +
+        330 * 60 * 1000,
+    );
+
+  return shifted
+    .toISOString()
+    .slice(0, 10);
+}
+
+function beginningOfTrendRange(
+  days,
+) {
+  const now = new Date();
+  const shifted =
+    new Date(
+      now.getTime() +
+        330 * 60 * 1000,
+    );
+
+  shifted.setUTCHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  shifted.setUTCDate(
+    shifted.getUTCDate() -
+      (days - 1),
+  );
+
+  return new Date(
+    shifted.getTime() -
+      330 * 60 * 1000,
+  );
+}
+
+function trendRangeBounds(
+  query,
+  days,
+) {
+  const explicit =
+    dateRangeFilter(query);
+
+  if (explicit) {
+    return {
+      from:
+        explicit.$gte ||
+        beginningOfTrendRange(
+          days,
+        ),
+
+      to:
+        explicit.$lte ||
+        new Date(),
+    };
+  }
+
+  return {
+    from:
+      beginningOfTrendRange(
+        days,
+      ),
+    to: new Date(),
+  };
+}
+
+function emptyTrendRow(
+  date,
+) {
+  return {
+    date,
+    notificationsSent: 0,
+    recipientSends: 0,
+    deviceSends: 0,
+    acceptedByFcm: 0,
+    failed: 0,
+    notificationOpens: 0,
+    alertsRead: 0,
+  };
+}
+
+export async function getAnalyticsTrend(
+  query = {},
+) {
+  const days =
+    normalizeTrendDays(
+      query.days,
+    );
+
+  const bounds =
+    trendRangeBounds(
+      query,
+      days,
+    );
+
+  const filter =
+    buildCampaignFilter(
+      {
+        ...query,
+        from:
+          bounds.from,
+        to:
+          bounds.to,
+      },
+    );
+
+  filter.createdAt = {
+    $gte: bounds.from,
+    $lte: bounds.to,
+  };
+
+  const campaigns =
+    await NotificationCampaign
+      .find(filter)
+      .select(
+        "_id createdAt totalDevices acceptedDevices rejectedDevices analyticsAvailable",
+      )
+      .sort({
+        createdAt: 1,
+      })
       .lean();
 
   const metricsMap =
@@ -833,50 +1324,60 @@ export async function getAnalyticsOverview(
       ),
     );
 
-  const totals = {
-    totalCampaigns:
-      campaigns.length,
+  const rows = new Map();
 
-    totalUsers: 0,
+  let cursor =
+    new Date(bounds.from);
 
-    totalDevices: 0,
+  while (
+    cursor <= bounds.to
+  ) {
+    const key =
+      analyticsDayKey(
+        cursor,
+      );
 
-    acceptedDevices: 0,
+    if (key) {
+      rows.set(
+        key,
+        emptyTrendRow(
+          key,
+        ),
+      );
+    }
 
-    rejectedDevices: 0,
-
-    openedUsers: 0,
-
-    readUsers: 0,
-
-    unreadUsers: 0,
-
-    completedCampaigns: 0,
-
-    partialCampaigns: 0,
-
-    failedCampaigns: 0,
-  };
+    cursor =
+      new Date(
+        cursor.getTime() +
+          24 *
+            60 *
+            60 *
+            1000,
+      );
+  }
 
   campaigns.forEach(
     (campaign) => {
-      totals.totalUsers +=
-        campaign.totalUsers ||
-        0;
+      const key =
+        analyticsDayKey(
+          campaign.createdAt,
+        );
 
-      totals.totalDevices +=
-        campaign.totalDevices ||
-        0;
+      if (!key) {
+        return;
+      }
 
-      totals.acceptedDevices +=
-        campaign
-          .acceptedDevices ||
-        0;
+      if (!rows.has(key)) {
+        rows.set(
+          key,
+          emptyTrendRow(
+            key,
+          ),
+        );
+      }
 
-      totals.rejectedDevices +=
-        campaign
-          .rejectedDevices ||
-        0;
+      const row =
+        rows.get(key);
 
       const dynamic =
         metricsMap.get(
@@ -885,41 +1386,52 @@ export async function getAnalyticsOverview(
           ),
         );
 
-      totals.openedUsers +=
+      row.notificationsSent += 1;
+
+      row.recipientSends +=
+        dynamic
+          ?.recipientRecords ||
+        0;
+
+      row.deviceSends +=
+        campaign.totalDevices ||
+        0;
+
+      row.acceptedByFcm +=
+        campaign
+          .acceptedDevices ||
+        0;
+
+      row.failed +=
+        campaign
+          .rejectedDevices ||
+        0;
+
+      row.notificationOpens +=
         dynamic?.openedUsers ||
         0;
 
-      totals.readUsers +=
+      row.alertsRead +=
         dynamic?.readUsers ||
         0;
-
-      totals.unreadUsers +=
-        dynamic?.unreadUsers ||
-        0;
-
-      if (
-        campaign.status ===
-        "completed"
-      ) {
-        totals.completedCampaigns +=
-          1;
-      } else if (
-        campaign.status ===
-        "partial"
-      ) {
-        totals.partialCampaigns +=
-          1;
-      } else if (
-        campaign.status ===
-        "failed"
-      ) {
-        totals.failedCampaigns +=
-          1;
-      }
     },
   );
 
-  return totals;
+  return {
+    days,
+    from: bounds.from,
+    to: bounds.to,
+    trend:
+      Array.from(
+        rows.values(),
+      ).sort(
+        (a, b) =>
+          String(a.date)
+            .localeCompare(
+              String(b.date),
+            ),
+      ),
+  };
 }
 
 export async function listCampaigns({

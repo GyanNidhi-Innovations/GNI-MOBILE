@@ -18,6 +18,7 @@ import {
   failCampaignPush,
   finalizeCampaignWithPushResult,
   getAnalyticsOverview,
+  getAnalyticsTrend,
   getCampaignDetails,
   listCampaignRecipients,
   listCampaigns,
@@ -1632,6 +1633,34 @@ export async function getNotificationAnalyticsOverview(
   } catch (error) {
     console.error(
       "getNotificationAnalyticsOverview error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function getNotificationAnalyticsTrend(
+  req,
+  res,
+) {
+  try {
+    const result =
+      await getAnalyticsTrend(
+        req.query,
+      );
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error(
+      "getNotificationAnalyticsTrend error:",
       error,
     );
 

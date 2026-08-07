@@ -4,6 +4,7 @@ import {
   deactivateDeviceToken,
   getMyNotifications,
   getNotificationAnalyticsOverview,
+  getNotificationAnalyticsTrend,
   getNotificationCampaign,
   getNotificationCampaignRecipients,
   getNotificationCampaigns,
@@ -95,6 +96,13 @@ router.get(
   "/admin/analytics/overview",
   requireInternalAdmin,
   getNotificationAnalyticsOverview,
+  getNotificationAnalyticsTrend,
+);
+
+router.get(
+  "/admin/analytics/trends",
+  requireInternalAdmin,
+  getNotificationAnalyticsTrend,
 );
 
 router.get(
