@@ -7,7 +7,12 @@ import {
   getEvents,
 } from "../controllers/eventController.js";
 
-const router = express.Router();
+import {
+  requireInternalAdmin,
+} from "../middleware/requireInternalAdmin.js";
+
+const router =
+  express.Router();
 
 router.get(
   "/",
@@ -16,6 +21,7 @@ router.get(
 
 router.post(
   "/",
+  requireInternalAdmin,
   createEvent,
 );
 

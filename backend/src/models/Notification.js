@@ -4,9 +4,27 @@ const notificationSchema =
   new mongoose.Schema(
     {
       userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        type:
+          mongoose.Schema.Types
+            .ObjectId,
+
+        ref: "Registration",
+
         required: true,
+
+        index: true,
+      },
+
+      campaignId: {
+        type:
+          mongoose.Schema.Types
+            .ObjectId,
+
+        ref:
+          "NotificationCampaign",
+
+        default: null,
+
         index: true,
       },
 
@@ -50,11 +68,45 @@ const notificationSchema =
           "failed",
         ],
         default: "queued",
+        index: true,
+      },
+
+      acceptedDeviceCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      rejectedDeviceCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      openedAt: {
+        type: Date,
+        default: null,
+        index: true,
+      },
+
+      openSource: {
+        type: String,
+        enum: [
+          "",
+          "system_tray",
+        ],
+        default: "",
       },
 
       read: {
         type: Boolean,
         default: false,
+        index: true,
+      },
+
+      readAt: {
+        type: Date,
+        default: null,
       },
 
       sentAt: {
@@ -82,7 +134,15 @@ notificationSchema.index({
   read: 1,
 });
 
-export default mongoose.model(
-  "Notification",
-  notificationSchema,
+notificationSchema.index({
+  campaignId: 1,
+  userId: 1,
+});
+
+export default (
+  mongoose.models.Notification ||
+  mongoose.model(
+    "Notification",
+    notificationSchema,
+  )
 );

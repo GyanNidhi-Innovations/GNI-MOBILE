@@ -23,7 +23,8 @@ function convertDataValue(value) {
 }
 
 /*
- * FCM requires every value in data to be a string.
+ * FCM requires every value in data to be a
+ * string.
  */
 export function stringifyNotificationData(
   data = {},
@@ -43,15 +44,14 @@ export function stringifyNotificationData(
 }
 
 /*
- * Defensive deduplication.
- *
- * Even if legacy database rows exist, the same
- * token is sent only once.
+ * Defensive deduplication. The same Firebase
+ * registration token is targeted only once.
  */
 export function dedupeDeviceRecords(
   records = [],
 ) {
-  const devicesByToken = new Map();
+  const devicesByToken =
+    new Map();
 
   for (const record of records) {
     if (!record?.token) continue;
@@ -62,12 +62,14 @@ export function dedupeDeviceRecords(
     );
   }
 
-  return [...devicesByToken.values()];
+  return [
+    ...devicesByToken.values(),
+  ];
 }
 
 /*
  * Returns each user only once, irrespective of
- * how many devices that user owns.
+ * how many active installations that user owns.
  */
 export function uniqueUserIdsFromDevices(
   deviceRecords = [],
@@ -77,7 +79,9 @@ export function uniqueUserIdsFromDevices(
       deviceRecords
         .map((record) =>
           record?.userId
-            ? String(record.userId)
+            ? String(
+                record.userId,
+              )
             : null,
         )
         .filter(Boolean),
@@ -87,26 +91,33 @@ export function uniqueUserIdsFromDevices(
 
 /*
  * Converts device-level Firebase responses into
- * user-level delivery summaries.
+ * user-level summaries.
  */
 export function buildUserDeliveryMap(
   deliveryResults = [],
 ) {
-  const resultByUser = new Map();
+  const resultByUser =
+    new Map();
 
   for (const result of deliveryResults) {
-    const userId = String(
-      result.userId || "",
-    );
+    const userId =
+      String(
+        result.userId || "",
+      );
 
     if (!userId) continue;
 
-    if (!resultByUser.has(userId)) {
-      resultByUser.set(userId, {
-        successCount: 0,
-        failureCount: 0,
-        errors: [],
-      });
+    if (
+      !resultByUser.has(userId)
+    ) {
+      resultByUser.set(
+        userId,
+        {
+          successCount: 0,
+          failureCount: 0,
+          errors: [],
+        },
+      );
     }
 
     const userResult =
@@ -129,11 +140,14 @@ export function buildUserDeliveryMap(
 }
 
 /*
- * Sends one push to each unique active token.
+ * Sends the same push payload to each unique
+ * active device token.
  *
- * Firebase permits up to 500 targets in one
- * multicast request, so devices are sent in
- * batches of 500.
+ * Firebase permits up to 500 targets per
+ * multicast request. The returned response list
+ * corresponds to the order of the supplied
+ * tokens, which lets us persist exact per-device
+ * FCM acceptance or rejection.
  */
 export async function sendPushToDeviceRecords({
   deviceRecords,
@@ -143,9 +157,13 @@ export async function sendPushToDeviceRecords({
   imageUrl = "",
 }) {
   const uniqueDevices =
-    dedupeDeviceRecords(deviceRecords);
+    dedupeDeviceRecords(
+      deviceRecords,
+    );
 
-  if (uniqueDevices.length === 0) {
+  if (
+    uniqueDevices.length === 0
+  ) {
     return {
       uniqueDevices: [],
       results: [],
@@ -156,97 +174,155 @@ export async function sendPushToDeviceRecords({
   }
 
   const stringData =
-    stringifyNotificationData(data);
+    stringifyNotificationData(
+      data,
+    );
 
   const results = [];
   const invalidTokens = [];
 
   for (
     let start = 0;
-    start < uniqueDevices.length;
+    start <
+    uniqueDevices.length;
     start += 500
   ) {
-    const batch = uniqueDevices.slice(
-      start,
-      start + 500,
-    );
+    const batch =
+      uniqueDevices.slice(
+        start,
+        start + 500,
+      );
 
-    const tokenValues = batch.map(
-      (device) => device.token,
-    );
+    const tokenValues =
+      batch.map(
+        (device) =>
+          device.token,
+      );
 
-   const response = await admin
-  .messaging()
-  .sendEachForMulticast({
-    tokens: tokenValues,
+    const response =
+      await admin
+        .messaging()
+        .sendEachForMulticast({
+          tokens:
+            tokenValues,
 
-    notification: {
-      title,
-      body,
+          notification: {
+            title,
+            body,
 
-      ...(imageUrl
-        ? {
-            imageUrl,
-          }
-        : {}),
-    },
+            ...(imageUrl
+              ? {
+                  imageUrl,
+                }
+              : {}),
+          },
 
-    data: stringData,
+          data:
+            stringData,
 
-    android: {
-      priority: "high",
+          android: {
+            priority:
+              "high",
 
-      notification: {
-        channelId: "default",
-        sound: "default",
+            notification: {
+              channelId:
+                "default",
 
-        ...(imageUrl
-          ? {
-              imageUrl,
-            }
-          : {}),
-      },
-    },
+              sound:
+                "default",
 
-    apns: {
-      payload: {
-        aps: {
-          sound: "default",
-        },
-      },
-    },
-  });
+              ...(imageUrl
+                ? {
+                    imageUrl,
+                  }
+                : {}),
+            },
+          },
+
+          apns: {
+            payload: {
+              aps: {
+                sound:
+                  "default",
+              },
+            },
+          },
+        });
 
     response.responses.forEach(
-      (firebaseResult, index) => {
-        const device = batch[index];
+      (
+        firebaseResult,
+        index,
+      ) => {
+        const device =
+          batch[index];
 
         const errorCode =
-          firebaseResult.error?.code ||
+          firebaseResult
+            .error?.code ||
           "";
 
         results.push({
-          userId: String(
-            device.userId || "",
-          ),
+          userId:
+            String(
+              device.userId ||
+                "",
+            ),
 
           installationId:
-            device.installationId || "",
+            String(
+              device.installationId ||
+                `legacy-${String(
+                  device.token || "",
+                ).slice(-10)}`,
+            ),
 
-          token: device.token,
+          deviceName:
+            String(
+              device.deviceName ||
+                "",
+            ),
+
+          platform:
+            [
+              "android",
+              "ios",
+              "unknown",
+            ].includes(
+              device.platform,
+            )
+              ? device.platform
+              : "unknown",
+
+          token:
+            device.token,
+
+          tokenSuffix:
+            String(
+              device.token ||
+                "",
+            ).slice(-10),
 
           success:
-            firebaseResult.success,
+            firebaseResult
+              .success,
+
+          messageId:
+            firebaseResult
+              .messageId ||
+            "",
 
           errorCode,
 
           errorMessage:
-            firebaseResult.error
-              ?.message || "",
+            firebaseResult
+              .error?.message ||
+            "",
         });
 
         if (
-          !firebaseResult.success &&
+          !firebaseResult
+            .success &&
           INVALID_REGISTRATION_CODES.has(
             errorCode,
           )
@@ -259,27 +335,30 @@ export async function sendPushToDeviceRecords({
     );
   }
 
-  /*
-   * Firebase has confirmed that these tokens are
-   * invalid or unregistered. Do not target them
-   * again.
-   */
-  if (invalidTokens.length > 0) {
-    await NotificationToken.updateMany(
-      {
-        token: {
-          $in: invalidTokens,
+  if (
+    invalidTokens.length > 0
+  ) {
+    await NotificationToken
+      .updateMany(
+        {
+          token: {
+            $in:
+              invalidTokens,
+          },
         },
-      },
-      {
-        $set: {
-          isActive: false,
-          lastFailedAt: new Date(),
-          failureReason:
-            "Firebase registration is invalid or unregistered",
+        {
+          $set: {
+            isActive:
+              false,
+
+            lastFailedAt:
+              new Date(),
+
+            failureReason:
+              "Firebase registration is invalid or unregistered",
+          },
         },
-      },
-    );
+      );
   }
 
   return {
@@ -288,12 +367,14 @@ export async function sendPushToDeviceRecords({
 
     successCount:
       results.filter(
-        (result) => result.success,
+        (result) =>
+          result.success,
       ).length,
 
     failureCount:
       results.filter(
-        (result) => !result.success,
+        (result) =>
+          !result.success,
       ).length,
 
     invalidTokensDisabled:

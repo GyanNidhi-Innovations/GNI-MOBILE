@@ -1,32 +1,118 @@
 import express from "express";
+
 import {
-  registerDeviceToken,
   deactivateDeviceToken,
   getMyNotifications,
-  markNotificationRead,
-  sendToUser,
-  sendToTopic,
+  getNotificationAnalyticsOverview,
+  getNotificationCampaign,
+  getNotificationCampaignRecipients,
+  getNotificationCampaigns,
   getUnreadCount,
+  markNotificationOpenedByCampaign,
+  markNotificationRead,
+  registerDeviceToken,
   sendToAllUsers,
+  sendToTopic,
+  sendToUser,
 } from "../controllers/notificationController.js";
 
 import {
   requireAuth,
 } from "../middleware/requireAuth.js";
 
+import {
+  requireInternalAdmin,
+} from "../middleware/requireInternalAdmin.js";
 
-const router = express.Router();
+const router =
+  express.Router();
 
-router.post("/register-token", requireAuth,registerDeviceToken);
+/*
+ * Mobile-user routes.
+ */
 router.post(
-  "/deactivate-token",requireAuth,
+  "/register-token",
+  requireAuth,
+  registerDeviceToken,
+);
+
+router.post(
+  "/deactivate-token",
+  requireAuth,
   deactivateDeviceToken,
 );
-router.get("/user/:userId", requireAuth,getMyNotifications);
-router.patch("/:id/read", requireAuth,markNotificationRead);
-router.post("/send", sendToUser);
-router.post("/send-topic", sendToTopic);
-router.get("/unread/:userId", requireAuth, getUnreadCount);
-router.post("/send-all", sendToAllUsers);
+
+router.get(
+  "/user/:userId",
+  requireAuth,
+  getMyNotifications,
+);
+
+router.get(
+  "/unread/:userId",
+  requireAuth,
+  getUnreadCount,
+);
+
+router.patch(
+  "/:id/read",
+  requireAuth,
+  markNotificationRead,
+);
+
+router.patch(
+  "/campaigns/:campaignId/opened",
+  requireAuth,
+  markNotificationOpenedByCampaign,
+);
+
+/*
+ * Service-to-service administrator routes.
+ *
+ * The Demos admin backend authenticates the
+ * administrator cookie and forwards these
+ * requests with x-admin-api-key.
+ */
+router.post(
+  "/send",
+  requireInternalAdmin,
+  sendToUser,
+);
+
+router.post(
+  "/send-all",
+  requireInternalAdmin,
+  sendToAllUsers,
+);
+
+router.post(
+  "/send-topic",
+  requireInternalAdmin,
+  sendToTopic,
+);
+
+router.get(
+  "/admin/analytics/overview",
+  requireInternalAdmin,
+  getNotificationAnalyticsOverview,
+);
+
+router.get(
+  "/admin/campaigns",
+  requireInternalAdmin,
+  getNotificationCampaigns,
+);
+
+router.get(
+  "/admin/campaigns/:campaignId",
+  requireInternalAdmin,
+  getNotificationCampaign,
+);
+
+router.get(
+  "/admin/campaigns/:campaignId/recipients",
+  requireInternalAdmin,
+  getNotificationCampaignRecipients,
+);
 
 export default router;

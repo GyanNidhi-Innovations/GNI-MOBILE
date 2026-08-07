@@ -5,11 +5,17 @@ import NotificationToken from "../models/NotificationToken.js";
 import Notification from "../models/Notification.js";
 
 import {
-  buildUserDeliveryMap,
   dedupeDeviceRecords,
   sendPushToDeviceRecords,
   uniqueUserIdsFromDevices,
 } from "../services/pushNotificationService.js";
+
+import {
+  campaignActorFromRequest,
+  createNotificationCampaign,
+  failCampaignPush,
+  finalizeCampaignWithPushResult,
+} from "../services/notificationAnalyticsService.js";
 
 function normalizeHttpUrl(value) {
   const input =
@@ -233,75 +239,11 @@ function normalizeContentSections(
 
 async function sendEventPush(
   event,
+  req,
 ) {
-  const rawDevices =
-    await NotificationToken.find({
-      isActive: true,
-    }).lean();
-
-  const devices =
-    dedupeDeviceRecords(
-      rawDevices,
-    );
-
-  const uniqueUserIds =
-    uniqueUserIdsFromDevices(
-      devices,
-    );
-
-  const imageUrl =
-    normalizeHttpUrl(
-      event.image,
-    );
-
-  const baseResult = {
-    totalUsers:
-      uniqueUserIds.length,
-
-    totalDevices:
-      devices.length,
-
-    successCount: 0,
-
-    failureCount: 0,
-
-    invalidTokensDisabled: 0,
-  };
-
-  console.log(
-    "[PUSH-DEBUG][EVENT] device state",
-    {
-      database:
-        mongoose.connection.name,
-
-      collection:
-        NotificationToken
-          .collection.name,
-
-      eventId:
-        String(event._id),
-
-      activeDeviceRecords:
-        rawDevices.length,
-
-      deduplicatedActiveDevices:
-        devices.length,
-
-      tokenLast10:
-        devices.map(
-          (device) =>
-            String(
-              device.token || "",
-            ).slice(-10),
-        ),
-    },
-  );
-
-  if (
-    devices.length === 0
-  ) {
-    return baseResult;
-  }
+  let campaign = null;
+  let inboxDocuments = [];
+  let devices = [];
 
   const title =
     "New Event";
@@ -309,41 +251,146 @@ async function sendEventPush(
   const body =
     `${event.title} is now available. Register now.`;
 
-  const inboxDocuments =
-    uniqueUserIds.length > 0
-      ? await Notification.insertMany(
+  const imageUrl =
+    normalizeHttpUrl(
+      event.image,
+    );
+
+  try {
+    campaign =
+      await createNotificationCampaign({
+        source:
+          "event",
+
+        targetType:
+          "all",
+
+        title,
+
+        body,
+
+        type:
+          "event",
+
+        screen:
+          "events",
+
+        eventId:
+          event._id,
+
+        createdBy:
+          campaignActorFromRequest(
+            req,
+          ),
+      });
+
+    const rawDevices =
+      await NotificationToken
+        .find({
+          isActive: true,
+        })
+        .lean();
+
+    devices =
+      dedupeDeviceRecords(
+        rawDevices,
+      );
+
+    const uniqueUserIds =
+      uniqueUserIdsFromDevices(
+        devices,
+      );
+
+    const campaignId =
+      String(
+        campaign._id,
+      );
+
+    console.log(
+      "[PUSH-DEBUG][EVENT] device state",
+      {
+        database:
+          mongoose.connection.name,
+
+        collection:
+          NotificationToken
+            .collection.name,
+
+        eventId:
+          String(
+            event._id,
+          ),
+
+        campaignId,
+
+        activeDeviceRecords:
+          rawDevices.length,
+
+        deduplicatedActiveDevices:
+          devices.length,
+      },
+    );
+
+    if (
+      devices.length === 0
+    ) {
+      return await failCampaignPush({
+        campaign,
+
+        inboxDocuments: [],
+
+        devices: [],
+
+        error:
+          new Error(
+            "No active notification devices found",
+          ),
+      });
+    }
+
+    const notificationData = {
+      screen:
+        "events",
+
+      eventId:
+        String(
+          event._id,
+        ),
+
+      imageUrl,
+
+      campaignId,
+    };
+
+    inboxDocuments =
+      await Notification
+        .insertMany(
           uniqueUserIds.map(
             (userId) => ({
               userId,
+
+              campaignId:
+                campaign._id,
 
               title,
 
               body,
 
-              type: "event",
+              type:
+                "event",
 
-              data: {
-                screen:
-                  "events",
-
-                eventId:
-                  String(
-                    event._id,
-                  ),
-
-                imageUrl,
-              },
+              data:
+                notificationData,
 
               deliveryStatus:
                 "queued",
 
-              read: false,
+              read:
+                false,
             }),
           ),
-        )
-      : [];
+        );
 
-  try {
     const pushResult =
       await sendPushToDeviceRecords({
         deviceRecords:
@@ -358,184 +405,67 @@ async function sendEventPush(
           undefined,
 
         data: {
-          type: "event",
+          ...notificationData,
 
-          screen: "events",
-
-          eventId:
-            String(event._id),
-
-          imageUrl,
+          type:
+            "event",
         },
       });
 
-    const deliveryMap =
-      buildUserDeliveryMap(
-        pushResult.results,
-      );
-
-    const operations =
-      inboxDocuments.map(
-        (document) => {
-          const delivery =
-            deliveryMap.get(
-              String(
-                document.userId,
-              ),
-            );
-
-          const delivered =
-            (
-              delivery?.successCount ||
-              0
-            ) > 0;
-
-          return {
-            updateOne: {
-              filter: {
-                _id:
-                  document._id,
-              },
-
-              update: {
-                $set: {
-                  deliveryStatus:
-                    delivered
-                      ? "sent"
-                      : "failed",
-
-                  sentAt:
-                    new Date(),
-
-                  failureReason:
-                    delivered
-                      ? ""
-                      : (
-                          delivery?.errors ||
-                          []
-                        ).join(
-                          ", ",
-                        ) ||
-                        "Push delivery failed",
-                },
-              },
-            },
-          };
-        },
-      );
-
-    if (
-      operations.length > 0
-    ) {
-      await Notification.bulkWrite(
-        operations,
-      );
-    }
+    const summary =
+      await finalizeCampaignWithPushResult({
+        campaign,
+        inboxDocuments,
+        pushResult,
+      });
 
     console.log(
       "[PUSH-DEBUG][EVENT] Firebase result",
       {
         eventId:
-          String(event._id),
+          String(
+            event._id,
+          ),
+
+        campaignId:
+          summary.campaignId,
 
         imageUrl,
 
         successCount:
-          pushResult.successCount,
+          summary.successCount,
 
         failureCount:
-          pushResult.failureCount,
+          summary.failureCount,
 
         invalidTokensDisabled:
-          pushResult
+          summary
             .invalidTokensDisabled,
-
-        deviceResults:
-          pushResult.results.map(
-            (result) => ({
-              userId:
-                result.userId,
-
-              installationId:
-                result.installationId,
-
-              tokenLast10:
-                String(
-                  result.token ||
-                    "",
-                ).slice(-10),
-
-              success:
-                result.success,
-
-              errorCode:
-                result.errorCode,
-
-              errorMessage:
-                result.errorMessage,
-            }),
-          ),
       },
     );
 
-    return {
-      totalUsers:
-        uniqueUserIds.length,
-
-      totalDevices:
-        pushResult
-          .uniqueDevices.length,
-
-      successCount:
-        pushResult.successCount,
-
-      failureCount:
-        pushResult.failureCount,
-
-      invalidTokensDisabled:
-        pushResult
-          .invalidTokensDisabled,
-    };
+    return summary;
   } catch (error) {
     console.error(
       "Event push delivery error:",
       error,
     );
 
-    if (
-      inboxDocuments.length > 0
-    ) {
-      await Notification.updateMany(
-        {
-          _id: {
-            $in:
-              inboxDocuments.map(
-                (document) =>
-                  document._id,
-              ),
-          },
-        },
-        {
-          $set: {
-            deliveryStatus:
-              "failed",
-
-            sentAt:
-              new Date(),
-
-            failureReason:
-              error.message,
-          },
-        },
-      );
+    if (campaign?._id) {
+      return await failCampaignPush({
+        campaign,
+        inboxDocuments,
+        devices,
+        error,
+      });
     }
 
     return {
-      ...baseResult,
-
-      failureCount:
-        devices.length,
-
+      totalUsers: 0,
+      totalDevices: 0,
+      successCount: 0,
+      failureCount: 0,
+      invalidTokensDisabled: 0,
       error:
         error.message,
     };
@@ -755,6 +685,7 @@ export const createEvent =
         notification =
           await sendEventPush(
             event,
+            req,
           );
       }
 
@@ -1023,4 +954,3 @@ export const getMyRegisteredEvents =
         });
     }
   };
-
