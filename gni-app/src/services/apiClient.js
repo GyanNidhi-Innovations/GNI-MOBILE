@@ -182,27 +182,6 @@ export const apiClient =
               ACCESS_TOKEN_KEY,
             );
 
-    const isPushRegistration =
-      endpoint ===
-      "/notifications/register-token";
-
-    if (isPushRegistration) {
-      console.log(
-        "[PUSH-DEBUG][API] Registration request",
-        {
-          url:
-            `${BASE_URL}${endpoint}`,
-
-          method:
-            requestOptions.method ||
-            "GET",
-
-          hasAuthToken:
-            Boolean(accessToken),
-        },
-      );
-    }
-
     let response;
 
 try {
@@ -213,19 +192,6 @@ try {
       accessToken,
     );
 } catch (error) {
-  if (isPushRegistration) {
-    console.log(
-      "[PUSH-DEBUG][API] Network failure",
-      {
-        url:
-          `${BASE_URL}${endpoint}`,
-
-        message:
-          error?.message ||
-          String(error),
-      },
-    );
-  }
 
   throw error;
 }
@@ -265,33 +231,7 @@ if (
     );
 }
 
-if (isPushRegistration) {
-  console.log(
-    "[PUSH-DEBUG][API] Registration response",
-    {
-      url:
-        `${BASE_URL}${endpoint}`,
 
-      status:
-        response.status,
-
-      ok:
-        response.ok,
-
-      success:
-        data?.success,
-
-      message:
-        data?.message,
-
-      deviceId:
-        data?.device?._id,
-
-      isActive:
-        data?.device?.isActive,
-    },
-  );
-}
 
 if (!response.ok) {
   const error =
