@@ -5,36 +5,12 @@ import { Platform } from "react-native";
 
 import { apiClient } from "./apiClient";
 
-
 const INSTALLATION_ID_KEY =
   "gniNotificationInstallationId";
-
 
 const FCM_RECOVERY_KEY =
   "gniFcmRecovery20260722";
 
-  console.log(
-  "[PUSH-DEBUG][MOBILE] notificationService module loaded",
-  {
-    installationKey:
-      INSTALLATION_ID_KEY,
-
-    recoveryKey:
-      FCM_RECOVERY_KEY,
-  },
-);
-
-
-  function summarizeToken(token) {
-  const value = String(token || "");
-
-  return {
-    exists: Boolean(value),
-    length: value.length,
-    first10: value.slice(0, 10),
-    last10: value.slice(-10),
-  };
-}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -113,14 +89,7 @@ async function registerNativeToken({
   userId,
   nativeToken,
 }) {
-  console.log(
-    "[PUSH-DEBUG][MOBILE] registerNativeToken started",
-    {
-      userId,
-      token: summarizeToken(nativeToken),
-      platform: Platform.OS,
-    },
-  );
+  
 
   if (!userId || !nativeToken) {
     throw new Error(
@@ -131,19 +100,6 @@ async function registerNativeToken({
   const installationId =
     await getOrCreateInstallationId();
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Registering token with backend",
-    {
-      userId,
-      installationId,
-      token: summarizeToken(nativeToken),
-      platform: Platform.OS,
-      deviceName:
-        Device.deviceName ||
-        Device.modelName ||
-        "",
-    },
-  );
 
   try {
     const response = await apiClient(
@@ -171,25 +127,6 @@ async function registerNativeToken({
       },
     );
 
-    console.log(
-      "[PUSH-DEBUG][MOBILE] Registration API succeeded",
-      {
-        success: response?.success,
-        message: response?.message,
-        deviceId: response?.device?._id,
-        savedUserId:
-          response?.device?.userId,
-        savedInstallationId:
-          response?.device?.installationId,
-        isActive:
-          response?.device?.isActive,
-        failureReason:
-          response?.device?.failureReason,
-        savedToken: summarizeToken(
-          response?.device?.token,
-        ),
-      },
-    );
 
     return {
       installationId,
@@ -197,16 +134,12 @@ async function registerNativeToken({
       response,
     };
   } catch (error) {
-    console.log(
-      "[PUSH-DEBUG][MOBILE] Registration API failed",
-      {
-        message:
-          error?.message || String(error),
-        userId,
-        installationId,
-        token: summarizeToken(nativeToken),
-      },
-    );
+      if (__DEV__) {
+  console.warn(
+    "Notification token registration failed:",
+    error?.message || error,
+  );
+}
 
     throw error;
   }
@@ -215,17 +148,7 @@ async function registerNativeToken({
 export async function registerForFcmNotifications(
   userId,
 ) {
-  console.log(
-    "[PUSH-DEBUG][MOBILE] FCM registration started",
-    {
-      userId,
-      hasUserId: Boolean(userId),
-      isPhysicalDevice: Device.isDevice,
-      platform: Platform.OS,
-      deviceName: Device.deviceName,
-      modelName: Device.modelName,
-    },
-  );
+ 
 
   if (!userId) {
     throw new Error(
@@ -255,36 +178,16 @@ export async function registerForFcmNotifications(
     },
   );
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Android channel ready",
-  );
+ 
 
   let permission =
     await Notifications.getPermissionsAsync();
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Existing permission",
-    {
-      status: permission?.status,
-      granted: permission?.granted,
-      canAskAgain:
-        permission?.canAskAgain,
-    },
-  );
 
   if (permission.status !== "granted") {
     permission =
       await Notifications.requestPermissionsAsync();
 
-    console.log(
-      "[PUSH-DEBUG][MOBILE] Permission request result",
-      {
-        status: permission?.status,
-        granted: permission?.granted,
-        canAskAgain:
-          permission?.canAskAgain,
-      },
-    );
   }
 
   if (permission.status !== "granted") {
@@ -293,9 +196,7 @@ export async function registerForFcmNotifications(
     );
   }
 
-  console.log(
-  "[PUSH-DEBUG][MOBILE] Requesting native FCM token",
-);
+
 
 let tokenResponse;
 
@@ -305,37 +206,11 @@ const recoveryAlreadyAttempted =
   );
 
 if (!recoveryAlreadyAttempted) {
-  const tokenBeforeReset =
-    await Notifications
-      .getDevicePushTokenAsync()
-      .catch((error) => {
-        console.log(
-          "[PUSH-DEBUG][MOBILE] Unable to read token before reset",
-          error?.message || String(error),
-        );
-
-        return null;
-      });
-
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Token before recovery",
-    {
-      token: summarizeToken(
-        tokenBeforeReset?.data,
-      ),
-    },
-  );
-
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Unregistering current FCM registration",
-  );
+ 
 
   await Notifications
     .unregisterForNotificationsAsync();
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] FCM registration removed",
-  );
 
   await new Promise((resolve) => {
     setTimeout(resolve, 2000);
@@ -345,27 +220,14 @@ if (!recoveryAlreadyAttempted) {
     await Notifications
       .getDevicePushTokenAsync();
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Token after recovery",
-    {
-      token: summarizeToken(
-        tokenResponse?.data,
-      ),
-
-      changed:
-        tokenBeforeReset?.data !==
-        tokenResponse?.data,
-    },
-  );
+ 
 
   await SecureStore.setItemAsync(
     FCM_RECOVERY_KEY,
     "attempted",
   );
 } else {
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Recovery was already attempted",
-  );
+  
 
   tokenResponse =
     await Notifications
@@ -375,13 +237,7 @@ if (!recoveryAlreadyAttempted) {
 const nativeToken =
   tokenResponse?.data;
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] Native token received",
-    {
-      type: tokenResponse?.type,
-      token: summarizeToken(nativeToken),
-    },
-  );
+
 
   if (!nativeToken) {
     throw new Error(
@@ -395,10 +251,7 @@ const nativeToken =
       nativeToken,
     });
 
-  console.log(
-    "[PUSH-DEBUG][MOBILE] FCM registration completed",
-  );
-
+ 
   return result;
 }
 
@@ -430,11 +283,12 @@ export function subscribeToPushTokenChanges(
           userId,
           nativeToken,
         }).catch((error) => {
-          console.log(
+          if (__DEV__) {
+          console.warn(
             "Push token refresh registration failed:",
-            error?.message ||
-              error,
+            error?.message || error,
           );
+        }
         });
       },
     );

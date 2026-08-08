@@ -29,7 +29,10 @@ import {
   deactivateCurrentNotificationInstallation,
 } from "@/services/notificationService";
 
+import useVexoPrivacyPause from "@/hooks/useVexoPrivacyPause";
+
 export default function ProfileScreen() {
+  useVexoPrivacyPause();
   const authUser = useAuthStore(
     (state) => state.user,
   );

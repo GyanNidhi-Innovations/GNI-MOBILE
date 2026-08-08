@@ -22,6 +22,8 @@ import AppScreen from "../../src/components/common/AppScreen";
 import AppInput from "../../src/components/ui/AppInput";
 import { COLORS, SPACING, RADIUS } from "../../src/theme";
 
+import useVexoPrivacyPause from "@/hooks/useVexoPrivacyPause";
+
 // Copy the website's existing colleges file to:
 // gni-app/src/data/colleges.js
 // It must export: export const colleges = [...];
@@ -459,6 +461,7 @@ function CollegeSearchField({ value, onChange, error }) {
 }
 
 export default function SignupScreen() {
+  useVexoPrivacyPause();
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
