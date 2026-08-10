@@ -264,6 +264,9 @@ const navigationSource =
       return;
 
     case "events":
+      router.back();
+      return;
+
     default:
       router.replace(
         "/(protected)/events",
