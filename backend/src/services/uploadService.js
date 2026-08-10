@@ -1,28 +1,10 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { s3Client } from "../config/s3Config.js";
+import {
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
 
-function sanitizeFileName(fileName) {
-  const original =
-    String(fileName || "file").trim();
-
-  const sanitized = original
-    // Replace spaces with hyphens.
-    .replace(/\s+/g, "-")
-
-    // Remove characters unsafe for public URLs.
-    .replace(
-      /[^a-zA-Z0-9._-]/g,
-      "-",
-    )
-
-    // Collapse repeated hyphens.
-    .replace(/-+/g, "-")
-
-    // Remove leading and trailing hyphens.
-    .replace(/^-+|-+$/g, "");
-
-  return sanitized || "file";
-}
+import {
+  s3Client,
+} from "../config/s3Config.js";
 
 export const uploadFileToSpaces =
   async ({
@@ -31,56 +13,41 @@ export const uploadFileToSpaces =
     mimeType,
     folder = "uploads",
   }) => {
-    const safeFileName =
-      sanitizeFileName(fileName);
-
     const key =
-      `${folder}/${Date.now()}-${safeFileName}`;
+      `${folder}/${Date.now()}-${fileName}`;
+
+    const bucket =
+      process.env.EVENT_SPACES_BUCKET ||
+      process.env.SPACES_BUCKET;
+
+    const cdnBaseUrl = (
+      process.env.EVENT_SPACES_CDN_URL ||
+      `https://${bucket}.${process.env.SPACES_REGION}.cdn.digitaloceanspaces.com`
+    ).replace(/\/+$/, "");
 
     const command =
       new PutObjectCommand({
-        Bucket:
-          process.env.SPACES_BUCKET,
-
+        Bucket: bucket,
         Key: key,
         Body: fileBuffer,
         ContentType: mimeType,
+
         ACL: "public-read",
+
+        CacheControl:
+          "public, max-age=86400",
       });
 
-    await s3Client.send(command);
-
-    const baseUrl =
-      `https://${process.env.SPACES_BUCKET}` +
-      `.${process.env.SPACES_REGION}` +
-      `.digitaloceanspaces.com`;
-
-    /*
-     * Encode every key segment so the returned
-     * value is always a valid public URL.
-     */
-    const encodedKey = key
-      .split("/")
-      .map((segment) =>
-        encodeURIComponent(segment),
-      )
-      .join("/");
+    await s3Client.send(
+      command,
+    );
 
     const publicUrl =
-      `${baseUrl}/${encodedKey}`;
-
-    console.log(
-      "[UPLOAD] Spaces upload completed",
-      {
-        originalFileName: fileName,
-        safeFileName,
-        key,
-        publicUrl,
-      },
-    );
+      `${cdnBaseUrl}/${key}`;
 
     return {
       url: publicUrl,
       key,
+      bucket,
     };
   };
