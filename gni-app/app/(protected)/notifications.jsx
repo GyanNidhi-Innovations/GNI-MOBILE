@@ -20,6 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
+import NetInfo from "@react-native-community/netinfo";
+
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
 import AppScreen from "@/components/common/AppScreen";
@@ -87,6 +89,10 @@ export default function NotificationsScreen() {
   const hasLoadedOnceRef =
     useRef(false);
 
+
+  const wasOfflineRef =
+  useRef(false);
+
   const userId =
     user?.id || user?._id;
 
@@ -127,10 +133,12 @@ export default function NotificationsScreen() {
           unreadItems,
         );
       } catch (error) {
-        console.log(
-          "fetch notifications error:",
-          error,
-        );
+        if (__DEV__) {
+  console.warn(
+    "fetch notifications error:",
+    error?.message || error,
+  );
+}
 
         Alert.alert(
           "Unable to load alerts",
@@ -174,6 +182,70 @@ export default function NotificationsScreen() {
       };
     }, [fetchNotifications]),
   );
+
+ useFocusEffect(
+  useCallback(() => {
+    let reconnectTimer = null;
+
+    const unsubscribe =
+      NetInfo.addEventListener(
+        (state) => {
+          const isOffline =
+            state.isConnected === false ||
+            state.isInternetReachable === false;
+
+          if (isOffline) {
+            wasOfflineRef.current = true;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+
+              reconnectTimer = null;
+            }
+
+            return;
+          }
+
+          const isOnline =
+            state.isConnected === true &&
+            state.isInternetReachable !== false;
+
+          if (
+            isOnline &&
+            wasOfflineRef.current
+          ) {
+            wasOfflineRef.current = false;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+            }
+
+            reconnectTimer =
+              setTimeout(() => {
+                fetchNotifications();
+                reconnectTimer = null;
+              }, 700);
+          }
+        },
+      );
+
+    return () => {
+      unsubscribe();
+
+      if (reconnectTimer) {
+        clearTimeout(
+          reconnectTimer,
+        );
+      }
+
+      wasOfflineRef.current = false;
+    };
+  }, [fetchNotifications]),
+);
 
   useEffect(() => {
     const subscription =
@@ -233,10 +305,12 @@ export default function NotificationsScreen() {
         decrementUnreadNotificationCount();
       }
     } catch (error) {
-      console.log(
-        "mark notification read error:",
-        error,
-      );
+      if (__DEV__) {
+  console.warn(
+    "mark notification read error:",
+    error?.message || error,
+  );
+}
 
       Alert.alert(
         "Unable to update alert",

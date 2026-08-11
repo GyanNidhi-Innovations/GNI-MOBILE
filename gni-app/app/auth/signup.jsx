@@ -17,6 +17,8 @@ import {
   loginUserApi,
 } from "../../src/services/authService";
 
+import * as Notifications from "expo-notifications";
+
 import { useAuthStore } from "../../src/stores/authStore";
 import AppScreen from "../../src/components/common/AppScreen";
 import AppInput from "../../src/components/ui/AppInput";
@@ -773,6 +775,9 @@ const authenticatedUser = {
     form.type,
 };
 
+Notifications
+  .clearLastNotificationResponse();
+
 await setAuth({
   user: authenticatedUser,
   accessToken,
@@ -1155,7 +1160,7 @@ await setAuth({
 
     <Text
       onPress={() =>
-        router.push(
+        router.navigate(
           "/auth/terms-and-conditions",
         )
       }
@@ -1171,7 +1176,7 @@ await setAuth({
 
     <Text
       onPress={() =>
-        router.push(
+        router.navigate(
           "/auth/privacy-policy",
         )
       }

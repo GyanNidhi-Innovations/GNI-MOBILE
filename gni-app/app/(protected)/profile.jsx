@@ -114,10 +114,12 @@ export default function ProfileScreen() {
 }
 
       } catch (error) {
-        console.log(
-          "fetchProfile error:",
-          error,
-        );
+        if (__DEV__) {
+  console.warn(
+    "fetchProfile error:",
+    error?.message || error,
+  );
+}
 
         Alert.alert(
           "Unable to load profile",
@@ -174,10 +176,12 @@ const handleLogout = async () => {
       );
     }
   } catch (error) {
-    console.log(
-      "Notification deactivation error:",
-      error?.message || error,
-    );
+    if (__DEV__) {
+  console.warn(
+    "Notification deactivation error:",
+    error?.message || error,
+  );
+}
   }
 
   try {
@@ -190,10 +194,12 @@ const handleLogout = async () => {
       );
     }
   } catch (error) {
-    console.log(
-      "Server logout error:",
-      error?.message || error,
-    );
+    if (__DEV__) {
+  console.warn(
+    "Server logout error:",
+    error?.message || error,
+  );
+}
   } finally {
     /*
      * Always clear local authentication.
@@ -587,7 +593,7 @@ const visibleProfileFields = [
   description="Get help with your account or the app."
   isCompactPhone={isCompactPhone}
   onPress={() =>
-    router.push(
+    router.navigate(
       "/auth/support",
     )
   }
@@ -601,7 +607,7 @@ const visibleProfileFields = [
   description="Learn how your information is handled."
   isCompactPhone={isCompactPhone}
   onPress={() =>
-    router.push(
+    router.navigate(
       "/auth/privacy-policy",
     )
   }
@@ -615,7 +621,7 @@ const visibleProfileFields = [
   description="Review the terms for using GyanNidhi."
   isCompactPhone={isCompactPhone}
   onPress={() =>
-    router.push(
+    router.navigate(
       "/auth/terms-and-conditions",
     )
   }

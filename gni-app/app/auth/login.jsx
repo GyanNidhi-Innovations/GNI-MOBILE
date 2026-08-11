@@ -12,6 +12,8 @@ import { router } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
 
+import * as Notifications from "expo-notifications";
+
 import { loginUserApi } from "../../src/services/authService";
 import { useAuthStore } from "../../src/stores/authStore";
 
@@ -92,6 +94,9 @@ const signupSupportGap =
         "The server returned an incomplete login response",
       );
     }
+
+    Notifications
+     .clearLastNotificationResponse();
 
     await setAuth({
       user:
@@ -246,7 +251,7 @@ const signupSupportGap =
 
 <Pressable
   disabled={loading}
-  onPress={() => router.push("/auth/forgot-password")}
+  onPress={() => router.navigate("/auth/forgot-password")}
   style={({ pressed }) => ({
     alignSelf: "center",
     paddingHorizontal: 12,
@@ -272,7 +277,7 @@ const signupSupportGap =
 
 <Pressable
   disabled={loading}
-  onPress={() => router.push("/auth/signup")}
+  onPress={() => router.navigate("/auth/signup")}
   style={({ pressed }) => ({
     alignSelf: "center",
     paddingHorizontal: 12,
