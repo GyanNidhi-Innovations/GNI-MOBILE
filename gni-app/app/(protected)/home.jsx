@@ -16,6 +16,7 @@ import {
   useFocusEffect,
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import NetInfo from "@react-native-community/netinfo";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
@@ -52,6 +53,9 @@ export default function HomeScreen() {
 
   const hasLoadedOnceRef =
     useRef(false);
+
+  const wasOfflineRef =
+  useRef(false);
 
   const fetchDashboard = useCallback(
     async () => {
@@ -97,10 +101,12 @@ export default function HomeScreen() {
           ).slice(0, 3),
         );
       } catch (error) {
-        console.log(
-          "fetchDashboard error:",
-          error,
-        );
+        if (__DEV__) {
+  console.warn(
+    "fetchDashboard error:",
+    error?.message || error,
+  );
+}
 
         Alert.alert(
           "Unable to refresh Home",
@@ -129,6 +135,71 @@ export default function HomeScreen() {
       fetchDashboard();
     }, [fetchDashboard]),
   );
+  
+
+ useFocusEffect(
+  useCallback(() => {
+    let reconnectTimer = null;
+
+    const unsubscribe =
+      NetInfo.addEventListener(
+        (state) => {
+          const isOffline =
+            state.isConnected === false ||
+            state.isInternetReachable === false;
+
+          if (isOffline) {
+            wasOfflineRef.current = true;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+
+              reconnectTimer = null;
+            }
+
+            return;
+          }
+
+          const isOnline =
+            state.isConnected === true &&
+            state.isInternetReachable !== false;
+
+          if (
+            isOnline &&
+            wasOfflineRef.current
+          ) {
+            wasOfflineRef.current = false;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+            }
+
+            reconnectTimer =
+              setTimeout(() => {
+                fetchDashboard();
+                reconnectTimer = null;
+              }, 700);
+          }
+        },
+      );
+
+    return () => {
+      unsubscribe();
+
+      if (reconnectTimer) {
+        clearTimeout(
+          reconnectTimer,
+        );
+      }
+
+      wasOfflineRef.current = false;
+    };
+  }, [fetchDashboard]),
+);
 
   const nextEvent = useMemo(() => {
     const now = new Date();

@@ -52,10 +52,12 @@ export default function ProtectedLayout() {
         response?.count || 0,
       );
     } catch (error) {
-      console.log(
-        "refreshUnreadCount error:",
-        error?.message || error,
-      );
+     if (__DEV__) {
+    console.warn(
+      "refreshUnreadCount error:",
+      error?.message || error,
+    );
+  }
     }
   }, [
     userId,
@@ -69,43 +71,18 @@ export default function ProtectedLayout() {
   useEffect(() => {
   if (!userId) return undefined;
 
-  console.log(
-    "[PUSH-DEBUG][LAYOUT] Notification effect running",
-    {
-      userId,
-      hasUserId: Boolean(userId),
-    },
-  );
+ 
 
-  registerForFcmNotifications(userId)
-    .then((result) => {
-      console.log(
-        "[PUSH-DEBUG][LAYOUT] Registration successful",
-        {
-          userId,
-          installationId:
-            result?.installationId,
-          tokenLast10:
-            result?.nativeToken?.slice(-10),
-          backendSuccess:
-            result?.response?.success,
-          backendIsActive:
-            result?.response?.device
-              ?.isActive,
-        },
-      );
-    })
-    .catch((error) => {
-      console.log(
-        "[PUSH-DEBUG][LAYOUT] Registration failed",
-        {
-          userId,
-          message:
-            error?.message ||
-            String(error),
-        },
-      );
-    });
+ registerForFcmNotifications(
+  userId,
+).catch((error) => {
+  if (__DEV__) {
+    console.warn(
+      "Notification registration failed:",
+      error?.message || error,
+    );
+  }
+});
 
   const openNotificationDestination =
     (data = {}) => {
@@ -152,9 +129,14 @@ export default function ProtectedLayout() {
           break;
 
         case "notifications":
-        default:
           router.push(
             "/(protected)/notifications",
+          );
+          break;
+        
+        default:
+          router.replace(
+            "/(protected)/home",
           );
           break;
       }
@@ -208,10 +190,12 @@ export default function ProtectedLayout() {
            * Opening the intended screen is more
            * important than analytics reporting.
            */
-          console.log(
-            "mark notification opened error:",
-            error?.message || error,
-          );
+         if (__DEV__) {
+    console.warn(
+      "mark notification opened error:",
+      error?.message || error,
+    );
+  }
         }
       }
 
@@ -281,6 +265,7 @@ export default function ProtectedLayout() {
 
   return (
     <Tabs
+     initialRouteName="home"
       screenOptions={{
   headerShown: false,
 
