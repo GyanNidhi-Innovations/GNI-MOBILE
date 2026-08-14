@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState , useRef } from "react";
 import {
   View,
   Text,
   Pressable,
-  Alert,
   Image,
   ActivityIndicator,
   useWindowDimensions,
+  Keyboard,
 } from "react-native";
 import { router } from "expo-router";
 
@@ -41,32 +41,85 @@ const signupSupportGap =
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const requestLockedRef = useRef(false);
+
   const [showPassword, setShowPassword] = useState(false);
+
+  const [emailError, setEmailError] = useState("");
+
+const [passwordError, setPasswordError] = useState("");
+
+const [loginError, setLoginError] = useState("");
 
   const setAuth = useAuthStore((state) => state.setAuth);
 
- const handleLogin = async () => {
+const handleLogin = async () => {
+  if (
+    loading ||
+    requestLockedRef.current
+  ) {
+    return;
+  }
+
   const cleanEmail =
-    email.trim();
+    email.trim().toLowerCase();
 
   const cleanPassword =
     password.trim();
 
-  if (
-    !cleanEmail ||
-    !cleanPassword
-  ) {
-    Alert.alert(
-      "Validation",
-      "Please enter email and password",
+  setEmailError("");
+  setPasswordError("");
+  setLoginError("");
+
+  let hasError = false;
+
+  if (!cleanEmail) {
+    setEmailError(
+      "Email is required",
     );
 
+    hasError = true;
+  } else if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      cleanEmail,
+    )
+  ) {
+    setEmailError(
+      "Enter a valid email address",
+    );
+
+    hasError = true;
+  }
+
+  if (!cleanPassword) {
+    setPasswordError(
+      "Password is required",
+    );
+
+    hasError = true;
+  }
+
+  /*
+   * Keep keyboard open when
+   * validation fails so the user
+   * can immediately correct it.
+   */
+  if (hasError) {
     return;
   }
 
-  if (loading) {
-    return;
-  }
+  /*
+   * Email and password passed
+   * local validation.
+   */
+  Keyboard.dismiss();
+
+  /*
+   * Prevent rapid double login
+   * requests immediately.
+   */
+  requestLockedRef.current = true;
 
   try {
     setLoading(true);
@@ -74,15 +127,15 @@ const signupSupportGap =
     const response =
       await loginUserApi({
         email: cleanEmail,
-        password:
-          cleanPassword,
+        password: cleanPassword,
       });
 
     if (!response?.success) {
-      throw new Error(
-        response?.message ||
-          "Invalid credentials",
+      setLoginError(
+        "Invalid email or password",
       );
+
+      return;
     }
 
     if (
@@ -90,17 +143,18 @@ const signupSupportGap =
       !response?.accessToken ||
       !response?.refreshToken
     ) {
-      throw new Error(
-        "The server returned an incomplete login response",
+      setLoginError(
+        "Unable to sign in. Please try again.",
       );
+
+      return;
     }
 
     Notifications
-     .clearLastNotificationResponse();
+      .clearLastNotificationResponse();
 
     await setAuth({
-      user:
-        response.user,
+      user: response.user,
 
       accessToken:
         response.accessToken,
@@ -113,12 +167,32 @@ const signupSupportGap =
       "/(protected)/home",
     );
   } catch (error) {
-    Alert.alert(
-      "Login Failed",
-      error?.message ||
-        "Something went wrong",
-    );
+    const message =
+      String(
+        error?.response?.data
+          ?.message ||
+          error?.message ||
+          "",
+      ).toLowerCase();
+
+    if (
+      message.includes(
+        "invalid credentials",
+      ) ||
+      message.includes(
+        "invalid email or password",
+      )
+    ) {
+      setLoginError(
+        "Invalid email or password",
+      );
+    } else {
+      setLoginError(
+        "Unable to sign in. Please try again.",
+      );
+    }
   } finally {
+    requestLockedRef.current = false;
     setLoading(false);
   }
 };
@@ -158,34 +232,151 @@ const signupSupportGap =
         backgroundColor: COLORS.surface,
       }}
     >
-      <AppInput
-        label="Email Address"
-        icon="mail-outline"
-        placeholder="Enter your email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        returnKeyType="next"
-        blurOnSubmit={false}
-      />
+     <AppInput
+  label="Email Address"
+  icon="mail-outline"
+  placeholder="Enter your email"
+  value={email}
+  onChangeText={(value) => {
+    setEmail(value);
 
-      <AppInput
-        label="Password"
-        icon="lock-closed-outline"
-        placeholder="Enter your password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry={!showPassword}
-        returnKeyType="done"
-        onSubmitEditing={handleLogin}
-        rightText={showPassword ? "Hide" : "Show"}
-        onRightPress={() => setShowPassword((previous) => !previous)}
-        style={{
-          marginBottom: 0,
-        }}
-      />
+    if (emailError) {
+      setEmailError("");
+    }
+
+    if (loginError) {
+      setLoginError("");
+    }
+  }}
+  keyboardType="email-address"
+  autoCapitalize="none"
+  returnKeyType="next"
+  blurOnSubmit={false}
+  style={{
+    marginBottom:
+      emailError ? 6 : SPACING.xl,
+  }}
+/>
+
+{emailError ? (
+  <View
+    style={{
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: SPACING.lg,
+    }}
+  >
+    <Ionicons
+      name="alert-circle-outline"
+      size={16}
+      color="#D92D20"
+    />
+
+    <Text
+      style={{
+        marginLeft: 6,
+        color: "#D92D20",
+        fontSize: 12,
+        lineHeight: 18,
+      }}
+    >
+      {emailError}
+    </Text>
+  </View>
+) : null}
+
+     <AppInput
+  label="Password"
+  icon="lock-closed-outline"
+  placeholder="Enter your password"
+  value={password}
+  onChangeText={(value) => {
+    setPassword(value);
+
+    if (passwordError) {
+      setPasswordError("");
+    }
+
+    if (loginError) {
+      setLoginError("");
+    }
+  }}
+  secureTextEntry={!showPassword}
+  returnKeyType="done"
+  onSubmitEditing={handleLogin}
+  rightText={
+    showPassword ? "Hide" : "Show"
+  }
+  onRightPress={() =>
+    setShowPassword(
+      (previous) => !previous,
+    )
+  }
+  style={{
+    marginBottom:
+      passwordError ? 6 : 0,
+  }}
+/>
+
+{passwordError ? (
+  <View
+    style={{
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 4,
+    }}
+  >
+    <Ionicons
+      name="alert-circle-outline"
+      size={16}
+      color="#D92D20"
+    />
+
+    <Text
+      style={{
+        marginLeft: 6,
+        color: "#D92D20",
+        fontSize: 12,
+        lineHeight: 18,
+      }}
+    >
+      {passwordError}
+    </Text>
+  </View>
+) : null}
     </View>
+
+    {loginError ? (
+  <View
+    style={{
+      borderRadius: 12,
+      backgroundColor: "#FEF3F2",
+      paddingHorizontal: 14,
+      paddingVertical:11,
+      flexDirection: "row",
+      alignItems: "center",
+    }}
+  >
+    <Ionicons
+      name="alert-circle-outline"
+      size={18}
+      color="#B42318"
+    />
+
+    <Text
+      style={{
+        flex: 1,
+        marginLeft: 8,
+        color: "#B42318",
+        fontSize: 13,
+        lineHeight: 19,
+        fontWeight: "600",
+      }}
+    >
+      {loginError}
+    </Text>
+  </View>
+) : null}
 
     {/* Sign-in button */}
 <View

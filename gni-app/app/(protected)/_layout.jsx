@@ -319,18 +319,8 @@ export default function ProtectedLayout() {
         }}
       />
 
-     <Tabs.Screen
+   <Tabs.Screen
   name="events"
-  listeners={{
-    tabPress: (event) => {
-      event.preventDefault();
-
-      router.replace(
-        "/(protected)/events",
-      );
-    },
-  }}
-
   options={{
     title: "Events",
 

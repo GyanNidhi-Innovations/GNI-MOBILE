@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
   Pressable,
-  Alert,
   ActivityIndicator,
+  Keyboard,
 } from "react-native";
 import {
   router,
@@ -62,6 +62,24 @@ export default function ResetPasswordScreen() {
   const [completed, setCompleted] =
     useState(false);
 
+    const requestLockedRef =
+  useRef(false);
+
+const [
+  passwordError,
+  setPasswordError,
+] = useState("");
+
+const [
+  confirmPasswordError,
+  setConfirmPasswordError,
+] = useState("");
+
+const [
+  formError,
+  setFormError,
+] = useState("");
+
   const [redirecting, setRedirecting] =
   useState(false);
 
@@ -91,32 +109,73 @@ export default function ResetPasswordScreen() {
     validateToken();
   }, [token]);
 
-  const handleResetPassword = async () => {
-    if (!password || !confirmPassword) {
-      Alert.alert(
-        "Validation",
-        "Please enter and confirm your new password",
-      );
+ const handleResetPassword =
+  async () => {
+    if (
+      loading ||
+      requestLockedRef.current
+    ) {
       return;
     }
 
-    if (!validatePassword(password)) {
-      Alert.alert(
-        "Validation",
-        "Password must contain at least 8 characters, including uppercase, lowercase, number and special character.",
+    setPasswordError("");
+    setConfirmPasswordError("");
+    setFormError("");
+
+    let hasError = false;
+
+    if (!password) {
+      setPasswordError(
+        "New password is required",
       );
-      return;
+
+      hasError = true;
+    } else if (
+      !validatePassword(password)
+    ) {
+      setPasswordError(
+        "Use at least 8 characters with uppercase, lowercase, number and special character",
+      );
+
+      hasError = true;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert(
-        "Validation",
+    if (!confirmPassword) {
+      setConfirmPasswordError(
+        "Confirm your new password",
+      );
+
+      hasError = true;
+    } else if (
+      password &&
+      password !== confirmPassword
+    ) {
+      setConfirmPasswordError(
         "Passwords do not match",
       );
+
+      hasError = true;
+    }
+
+    if (hasError) {
       return;
     }
 
-    if (!token || loading) return;
+    if (!token) {
+      setFormError(
+        "This reset session is invalid or expired.",
+      );
+      return;
+    }
+
+    /*
+     * Validation passed.
+     * Close the keyboard before
+     * starting the request.
+     */
+    Keyboard.dismiss();
+
+    requestLockedRef.current = true;
 
     try {
       setLoading(true);
@@ -128,22 +187,24 @@ export default function ResetPasswordScreen() {
 
       setCompleted(true);
 
-setTimeout(() => {
-  setRedirecting(true);
+      setTimeout(() => {
+        setRedirecting(true);
 
-  setTimeout(() => {
-    router.replace("/auth/login");
-  }, 1000);
-
-}, 2000);
-
+        setTimeout(() => {
+          router.replace(
+            "/auth/login",
+          );
+        }, 1000);
+      }, 2000);
     } catch (error) {
-      Alert.alert(
-        "Reset failed",
+      setFormError(
         error?.message ||
-          "Unable to reset your password",
+          "Unable to reset your password. Please try again.",
       );
     } finally {
+      requestLockedRef.current =
+        false;
+
       setLoading(false);
     }
   };
@@ -425,45 +486,137 @@ setTimeout(() => {
         }}
       >
         <AppInput
-          label="New Password"
-          icon="lock-closed-outline"
-          placeholder="Enter new password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          rightText={
-            showPassword ? "Hide" : "Show"
-          }
-          onRightPress={() =>
-            setShowPassword(
-              (previous) => !previous,
-            )
-          }
-        />
+  label="New Password"
+  icon="lock-closed-outline"
+  placeholder="Enter new password"
+  value={password}
+  onChangeText={(value) => {
+    setPassword(value);
+
+    if (passwordError) {
+      setPasswordError("");
+    }
+
+    if (formError) {
+      setFormError("");
+    }
+  }}
+  secureTextEntry={!showPassword}
+  rightText={
+    showPassword ? "Hide" : "Show"
+  }
+  onRightPress={() =>
+    setShowPassword(
+      (previous) => !previous,
+    )
+  }
+  style={{
+    marginBottom:
+      passwordError
+        ? 6
+        : SPACING.xl,
+  }}
+/>
+
+{passwordError ? (
+  <View
+    style={{
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: SPACING.lg,
+    }}
+  >
+    <Ionicons
+      name="alert-circle-outline"
+      size={16}
+      color="#D92D20"
+      style={{
+        marginTop: 1,
+      }}
+    />
+
+    <Text
+      style={{
+        flex: 1,
+        marginLeft: 6,
+        color: "#D92D20",
+        fontSize: 12,
+        lineHeight: 18,
+      }}
+    >
+      {passwordError}
+    </Text>
+  </View>
+) : null}
 
         <AppInput
-          label="Confirm Password"
-          icon="shield-checkmark-outline"
-          placeholder="Confirm new password"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry={!showConfirmPassword}
-          rightText={
-            showConfirmPassword
-              ? "Hide"
-              : "Show"
-          }
-          onRightPress={() =>
-            setShowConfirmPassword(
-              (previous) => !previous,
-            )
-          }
-          returnKeyType="done"
-          onSubmitEditing={handleResetPassword}
-          style={{
-            marginBottom: 0,
-          }}
-        />
+  label="Confirm Password"
+  icon="shield-checkmark-outline"
+  placeholder="Confirm new password"
+  value={confirmPassword}
+  onChangeText={(value) => {
+    setConfirmPassword(value);
+
+    if (confirmPasswordError) {
+      setConfirmPasswordError("");
+    }
+
+    if (formError) {
+      setFormError("");
+    }
+  }}
+  secureTextEntry={
+    !showConfirmPassword
+  }
+  rightText={
+    showConfirmPassword
+      ? "Hide"
+      : "Show"
+  }
+  onRightPress={() =>
+    setShowConfirmPassword(
+      (previous) => !previous,
+    )
+  }
+  returnKeyType="done"
+  onSubmitEditing={
+    handleResetPassword
+  }
+  style={{
+    marginBottom:
+      confirmPasswordError
+        ? 6
+        : 0,
+  }}
+/>
+
+{confirmPasswordError ? (
+  <View
+    style={{
+      marginTop: 4,
+      flexDirection: "row",
+      alignItems: "center",
+    }}
+  >
+    <Ionicons
+      name="alert-circle-outline"
+      size={16}
+      color="#D92D20"
+    />
+
+    <Text
+      style={{
+        marginLeft: 6,
+        color: "#D92D20",
+        fontSize: 12,
+        lineHeight: 18,
+      }}
+    >
+      {confirmPasswordError}
+    </Text>
+  </View>
+) : null}
+
       </View>
 
       <Text
@@ -477,6 +630,39 @@ setTimeout(() => {
         Use at least 8 characters with uppercase,
         lowercase, number and special character.
       </Text>
+
+      {formError ? (
+  <View
+    style={{
+      marginTop: SPACING.lg,
+      borderRadius: 12,
+      backgroundColor: "#FEF3F2",
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      flexDirection: "row",
+      alignItems: "center",
+    }}
+  >
+    <Ionicons
+      name="alert-circle-outline"
+      size={18}
+      color="#B42318"
+    />
+
+    <Text
+      style={{
+        flex: 1,
+        marginLeft: 8,
+        color: "#B42318",
+        fontSize: 13,
+        lineHeight: 19,
+        fontWeight: "600",
+      }}
+    >
+      {formError}
+    </Text>
+  </View>
+) : null}
 
       <View
   style={{

@@ -26,6 +26,7 @@ import { COLORS, SPACING, RADIUS } from "../../src/theme";
 
 import useVexoPrivacyPause from "@/hooks/useVexoPrivacyPause";
 
+
 // Copy the website's existing colleges file to:
 // gni-app/src/data/colleges.js
 // It must export: export const colleges = [...];
@@ -1248,8 +1249,12 @@ await setAuth({
   <View style={{ height: 24 }} />
 
   <Pressable
-    disabled={loading}
-    onPress={() => router.replace("/auth/login")}
+  disabled={loading}
+  onPress={() =>
+    router.navigate(
+      "/auth/login",
+    )
+  }
     style={{
       paddingHorizontal: 12,
       paddingVertical: 6,

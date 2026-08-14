@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -7,7 +8,6 @@ import {
 
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -19,9 +19,12 @@ import {
 import {
   router,
   useFocusEffect,
+  useLocalSearchParams,
 } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
+
+import NetInfo from  "@react-native-community/netinfo";
 
 import {
   SafeAreaView,
@@ -96,6 +99,7 @@ function EventCard({
   item,
   type,
   isCompactPhone,
+  onOpen,
 }) {
   const [
     imageFailed,
@@ -110,15 +114,7 @@ function EventCard({
     return;
   }
 
-  router.push({
-    pathname:
-      "/(protected)/events/[id]",
-
-    params: {
-      id: String(item._id),
-      source: "events",
-    },
-  });
+  onOpen(item);
 };
 
   return (
@@ -354,16 +350,39 @@ function EventCard({
 }
 
 export default function EventsScreen() {
+
+const { tab } =
+  useLocalSearchParams();
+
+const requestedTab =
+  Array.isArray(tab)
+    ? tab[0]
+    : tab;
+    
   const [
     activeTab,
     setActiveTab,
   ] = useState("upcoming");
+
+  useEffect(() => {
+  if (
+    requestedTab === "past" ||
+    requestedTab === "upcoming"
+  ) {
+    setActiveTab(
+      requestedTab,
+    );
+  }
+}, [requestedTab]);
 
   const [events, setEvents] =
     useState([]);
 
   const [loading, setLoading] =
     useState(true);
+
+    const [loadError, setLoadError] =
+     useState(null);
 
   const [
     refreshing,
@@ -372,6 +391,9 @@ export default function EventsScreen() {
 
   const loadedOnceRef =
     useRef(false);
+
+  const wasOfflineRef =
+   useRef(false);
 
   const insets =
     useSafeAreaInsets();
@@ -383,49 +405,71 @@ export default function EventsScreen() {
   } = useResponsive();
 
   const fetchEvents =
-    useCallback(
-      async ({
-        initial = false,
-      } = {}) => {
-        try {
-          if (
-            initial &&
-            !loadedOnceRef.current
-          ) {
-            setLoading(true);
-          }
-
-          const response =
-            await getEvents();
-
-          setEvents(
-            Array.isArray(
-              response?.events,
-            )
-              ? response.events
-              : [],
-          );
-
-          loadedOnceRef.current =
-            true;
-        } catch (error) {
-          console.log(
-            "fetchEvents error:",
-            error,
-          );
-
-          Alert.alert(
-            "Unable to load events",
-            error?.message ||
-              "Please try again.",
-          );
-        } finally {
-          setLoading(false);
+  useCallback(
+    async ({
+      initial = false,
+    } = {}) => {
+      try {
+        if (
+          initial &&
+          !loadedOnceRef.current
+        ) {
+          setLoading(true);
         }
-      },
-      [],
-    );
 
+        const response =
+          await getEvents();
+
+        setEvents(
+          Array.isArray(
+            response?.events,
+          )
+            ? response.events
+            : [],
+        );
+
+        setLoadError(null);
+
+        loadedOnceRef.current =
+          true;
+
+        return true;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "fetchEvents error:",
+            error?.message ||
+              error,
+          );
+        }
+
+        try {
+          const networkState =
+            await NetInfo.fetch();
+
+          const isOffline =
+            networkState
+              .isConnected === false ||
+            networkState
+              .isInternetReachable ===
+              false;
+
+          setLoadError(
+            isOffline
+              ? "offline"
+              : "error",
+          );
+        } catch {
+          setLoadError("error");
+        }
+
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
   useFocusEffect(
     useCallback(() => {
       fetchEvents({
@@ -433,6 +477,116 @@ export default function EventsScreen() {
       });
     }, [fetchEvents]),
   );
+
+
+  useFocusEffect(
+  useCallback(() => {
+    let reconnectTimer = null;
+    let retryTimer = null;
+
+    const unsubscribe =
+      NetInfo.addEventListener(
+        (state) => {
+          const isOffline =
+            state.isConnected ===
+              false ||
+            state
+              .isInternetReachable ===
+              false;
+
+          if (isOffline) {
+            wasOfflineRef.current =
+              true;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+
+              reconnectTimer = null;
+            }
+
+            if (retryTimer) {
+              clearTimeout(
+                retryTimer,
+              );
+
+              retryTimer = null;
+            }
+
+            return;
+          }
+
+          const isOnline =
+            state.isConnected ===
+              true &&
+            state
+              .isInternetReachable !==
+              false;
+
+          if (
+            isOnline &&
+            wasOfflineRef.current
+          ) {
+            wasOfflineRef.current =
+              false;
+
+            reconnectTimer =
+              setTimeout(
+                async () => {
+                  const success =
+                    await fetchEvents();
+
+                  reconnectTimer =
+                    null;
+
+                  /*
+                   * Android can report
+                   * internet restored before
+                   * requests actually work.
+                   *
+                   * Retry once.
+                   */
+                  if (!success) {
+                    retryTimer =
+                      setTimeout(
+                        () => {
+                          void fetchEvents();
+
+                          retryTimer =
+                            null;
+                        },
+                        1500,
+                      );
+                  }
+                },
+                700,
+              );
+          }
+        },
+      );
+
+    return () => {
+      unsubscribe();
+
+      if (reconnectTimer) {
+        clearTimeout(
+          reconnectTimer,
+        );
+      }
+
+      if (retryTimer) {
+        clearTimeout(
+          retryTimer,
+        );
+      }
+
+      wasOfflineRef.current =
+        false;
+    };
+  }, [fetchEvents]),
+);
+ 
 
   const handleRefresh =
     useCallback(async () => {
@@ -519,22 +673,185 @@ export default function EventsScreen() {
       events,
     ]);
 
-  const renderEvent =
-    useCallback(
-      ({ item }) => (
-        <EventCard
-          item={item}
-          type={type}
-          isCompactPhone={
-            isCompactPhone
-          }
-        />
-      ),
-      [
-        isCompactPhone,
-        type,
-      ],
+   const handleOpenEvent =
+  useCallback((event) => {
+    if (!event?._id) {
+      return;
+    }
+
+    router.navigate({
+      pathname:
+        "/(protected)/events/[id]",
+
+      params: {
+        id: String(
+          event._id,
+        ),
+        source: "events",
+      },
+    });
+  }, []);
+
+ const renderEvent =
+  useCallback(
+    ({ item }) => (
+      <EventCard
+        item={item}
+        type={type}
+        isCompactPhone={
+          isCompactPhone
+        }
+        onOpen={
+          handleOpenEvent
+        }
+      />
+    ),
+    [
+      handleOpenEvent,
+      isCompactPhone,
+      type,
+    ],
+  );
+
+  const renderEmptyState = () => {
+  if (loadError) {
+    const offline =
+      loadError === "offline";
+
+    return (
+      <View
+        style={
+          styles.emptyContainer
+        }
+      >
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 22,
+            backgroundColor:
+              "#F2F4F7",
+          }}
+        >
+          <Ionicons
+            name={
+              offline
+                ? "cloud-offline-outline"
+                : "alert-circle-outline"
+            }
+            size={32}
+            color="#667085"
+          />
+        </View>
+
+        <Text
+          style={{
+            marginTop: 18,
+            color: "#101828",
+            fontSize:
+              type.sectionTitle,
+            fontWeight: "800",
+            textAlign: "center",
+          }}
+        >
+          {offline
+            ? "No internet connection"
+            : "Unable to load events"}
+        </Text>
+
+        <Text
+          style={{
+            marginTop: 8,
+            maxWidth: 310,
+            color: "#667085",
+            fontSize: type.body,
+            lineHeight:
+              type.body + 8,
+            textAlign: "center",
+          }}
+        >
+          {offline
+            ? "Check your connection. Events will refresh automatically when you're back online."
+            : "We couldn't load the events right now. Please try again."}
+        </Text>
+
+        <Pressable
+          onPress={() => {
+            void fetchEvents();
+          }}
+          style={({ pressed }) => ({
+            minWidth: 150,
+            minHeight: 48,
+            marginTop: 22,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 14,
+            backgroundColor:
+              "#022670",
+            opacity:
+              pressed ? 0.85 : 1,
+          })}
+        >
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: type.button,
+              fontWeight: "700",
+            }}
+          >
+            Try again
+          </Text>
+        </Pressable>
+      </View>
     );
+  }
+
+  return (
+    <View
+      style={
+        styles.emptyContainer
+      }
+    >
+      <Ionicons
+        name="calendar-clear-outline"
+        size={44}
+        color="#667085"
+      />
+
+      <Text
+        style={{
+          marginTop: 16,
+          color: "#101828",
+          fontSize:
+            type.sectionTitle,
+          fontWeight: "800",
+          textAlign: "center",
+        }}
+      >
+        {activeTab === "upcoming"
+          ? "No upcoming events"
+          : "No past events"}
+      </Text>
+
+      <Text
+        style={{
+          marginTop: 8,
+          color: "#667085",
+          fontSize: type.body,
+          lineHeight:
+            type.body + 8,
+          textAlign: "center",
+        }}
+      >
+        {activeTab === "upcoming"
+          ? "New events will appear here when they are published."
+          : "Completed events will appear here for reference."}
+      </Text>
+    </View>
+  );
+};
 
   const listHeader = (
     <View
@@ -741,58 +1058,7 @@ export default function EventsScreen() {
             100 + insets.bottom,
         }}
         ListEmptyComponent={
-          <View
-            style={
-              styles.emptyContainer
-            }
-          >
-            <Ionicons
-              name="calendar-clear-outline"
-              size={44}
-              color="#667085"
-            />
-
-            <Text
-              style={{
-                marginTop: 16,
-
-                color: "#101828",
-
-                fontSize:
-                  type.sectionTitle,
-
-                fontWeight: "800",
-
-                textAlign: "center",
-              }}
-            >
-              {activeTab ===
-              "upcoming"
-                ? "No upcoming events"
-                : "No past events"}
-            </Text>
-
-            <Text
-              style={{
-                marginTop: 8,
-
-                color: "#667085",
-
-                fontSize:
-                  type.body,
-
-                lineHeight:
-                  type.body + 8,
-
-                textAlign: "center",
-              }}
-            >
-              {activeTab ===
-              "upcoming"
-                ? "New events will appear here when they are published."
-                : "Completed events will appear here for reference."}
-            </Text>
-          </View>
+         renderEmptyState
         }
       />
     </SafeAreaView>
