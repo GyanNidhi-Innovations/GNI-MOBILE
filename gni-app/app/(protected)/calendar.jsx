@@ -307,13 +307,13 @@ useFocusEffect(
     }
 
     router.navigate({
-      pathname:
-        "/(protected)/events/[id]",
-      params: {
-        id: String(event._id),
-        source: "calendar",
-      },
-    });
+  pathname:
+    "/(protected)/events/[id]",
+  params: {
+    id: String(event._id),
+    source: "calendar",
+  },
+});
   };
 
   if (loading) {

@@ -298,7 +298,9 @@ const handleBack =
         return;
 
       case "calendar":
-        router.replace(
+        router.dismissAll();
+
+        router.navigate(
           "/(protected)/calendar",
         );
         return;
