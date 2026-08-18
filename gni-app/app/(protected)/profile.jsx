@@ -1,12 +1,13 @@
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
   Pressable,
   Text,
   View,
 } from "react-native";
 import {
   useCallback,
+  useRef,
   useState,
 } from "react";
 import {
@@ -14,6 +15,9 @@ import {
   useRouter,
 } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+
+import NetInfo from
+  "@react-native-community/netinfo";
 
 import { useAuthStore } from "@/stores/authStore";
 import { apiClient } from "@/services/apiClient";
@@ -60,6 +64,22 @@ export default function ProfileScreen() {
     useState(!authUser);
   const [refreshing, setRefreshing] =
     useState(false);
+
+ const [loggingOut, setLoggingOut] =
+  useState(false);
+
+  const [
+  logoutModalVisible,
+  setLogoutModalVisible,
+] = useState(false);
+
+
+const logoutLockedRef =
+  useRef(false);
+
+
+  const wasOfflineRef =
+  useRef(false);
 
   const fetchProfile =
   useCallback(
@@ -114,20 +134,22 @@ export default function ProfileScreen() {
 }
 
       } catch (error) {
-        if (__DEV__) {
-  console.warn(
-    "fetchProfile error:",
-    error?.message || error,
-  );
-}
+  if (__DEV__) {
+    console.warn(
+      "fetchProfile error:",
+      error?.message || error,
+    );
+  }
 
-        Alert.alert(
-          "Unable to load profile",
-
-          error?.message ||
-            "Please try again.",
-        );
-      } finally {
+  /*
+   * Do not clear the previous
+   * profile and do not interrupt
+   * the user with a network popup.
+   *
+   * Previously loaded/local user
+   * information remains visible.
+   */
+} finally {
         setLoading(false);
       }
     },
@@ -144,6 +166,102 @@ export default function ProfileScreen() {
     }, [fetchProfile]),
   );
 
+ useFocusEffect(
+  useCallback(() => {
+    let reconnectTimer = null;
+    let retryTimer = null;
+
+    const unsubscribe =
+      NetInfo.addEventListener(
+        (state) => {
+          const isOffline =
+            state.isConnected ===
+              false ||
+            state
+              .isInternetReachable ===
+              false;
+
+          if (isOffline) {
+            wasOfflineRef.current =
+              true;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+
+              reconnectTimer = null;
+            }
+
+            if (retryTimer) {
+              clearTimeout(
+                retryTimer,
+              );
+
+              retryTimer = null;
+            }
+
+            return;
+          }
+
+          const isOnline =
+            state.isConnected ===
+              true &&
+            state
+              .isInternetReachable !==
+              false;
+
+          if (
+            isOnline &&
+            wasOfflineRef.current
+          ) {
+            wasOfflineRef.current =
+              false;
+
+            reconnectTimer =
+              setTimeout(
+                async () => {
+                  try {
+                    await fetchProfile(
+                      false,
+                    );
+                  } catch {
+                    /*
+                     * fetchProfile already
+                     * handles its own error.
+                     */
+                  }
+
+                  reconnectTimer =
+                    null;
+                },
+                700,
+              );
+          }
+        },
+      );
+
+    return () => {
+      unsubscribe();
+
+      if (reconnectTimer) {
+        clearTimeout(
+          reconnectTimer,
+        );
+      }
+
+      if (retryTimer) {
+        clearTimeout(
+          retryTimer,
+        );
+      }
+
+      wasOfflineRef.current =
+        false;
+    };
+  }, [fetchProfile]),
+);
+
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
@@ -156,6 +274,21 @@ export default function ProfileScreen() {
  
 
 const handleLogout = async () => {
+  if (
+    loggingOut ||
+    logoutLockedRef.current
+  ) {
+    return;
+  }
+
+  /*
+   * Ref changes immediately.
+   * This blocks a second rapid tap
+   * before React updates loggingOut.
+   */
+  logoutLockedRef.current = true;
+  setLoggingOut(true);
+
   const userId =
     authUser?.id ||
     authUser?._id;
@@ -167,40 +300,44 @@ const handleLogout = async () => {
 
   try {
     /*
-     * Disable this phone's notification token
-     * before clearing the access token.
+     * Disable this installation
+     * before clearing authentication.
      */
     if (userId) {
-      await deactivateCurrentNotificationInstallation(
-        userId,
-      );
+      try {
+        await deactivateCurrentNotificationInstallation(
+          userId,
+        );
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "Notification deactivation error:",
+            error?.message ||
+              error,
+          );
+        }
+      }
     }
-  } catch (error) {
-    if (__DEV__) {
-  console.warn(
-    "Notification deactivation error:",
-    error?.message || error,
-  );
-}
-  }
 
-  try {
     /*
-     * Revoke the refresh token on the backend.
+     * Revoke backend refresh token.
      */
     if (refreshToken) {
-      await logoutUserApi(
-        refreshToken,
-      );
+      try {
+        await logoutUserApi(
+          refreshToken,
+        );
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "Server logout error:",
+            error?.message ||
+              error,
+          );
+        }
+      }
     }
-  } catch (error) {
-    if (__DEV__) {
-  console.warn(
-    "Server logout error:",
-    error?.message || error,
-  );
-}
-  } finally {
+
     /*
      * Always clear local authentication.
      */
@@ -209,6 +346,23 @@ const handleLogout = async () => {
     router.replace(
       "/auth/login",
     );
+  } catch (error) {
+    if (__DEV__) {
+      console.warn(
+        "Logout error:",
+        error?.message ||
+          error,
+      );
+    }
+
+    /*
+     * Allow another attempt only
+     * if logout/navigation itself failed.
+     */
+    logoutLockedRef.current =
+      false;
+
+    setLoggingOut(false);
   }
 };
 
@@ -629,7 +783,12 @@ const visibleProfileFields = [
       </View>
 
       <Pressable
-        onPress={handleLogout}
+        disabled={loggingOut}
+        onPress={() => {
+          if (!loggingOut) {
+            setLogoutModalVisible(true);
+          }
+        }}
         style={{
           minHeight: 52,
           alignItems: "center",
@@ -641,22 +800,206 @@ const visibleProfileFields = [
         }}
       >
         <Ionicons
-          name="log-out-outline"
-          size={20}
-          color="#B42318"
+  name="log-out-outline"
+  size={20}
+  color="#B42318"
+/>
+
+<Text
+  style={{
+    marginLeft: 8,
+    color: "#B42318",
+    fontSize: type.button,
+    fontWeight: "800",
+  }}
+>
+  Logout
+</Text>
+
+
+      </Pressable>
+     <Modal
+  visible={logoutModalVisible}
+  transparent
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => {
+    if (!loggingOut) {
+      setLogoutModalVisible(false);
+    }
+  }}
+>
+  <View
+    style={{
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor:
+        "rgba(0, 0, 0, 0.55)",
+      paddingHorizontal: 28,
+    }}
+  >
+    {loggingOut ? (
+      <View
+        style={{
+          minWidth: 240,
+          borderRadius: 18,
+          backgroundColor: "#FFFFFF",
+          paddingHorizontal: 28,
+          paddingVertical: 24,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator
+          size="small"
+          color="#101828"
         />
 
         <Text
           style={{
-            marginLeft: 8,
-            color: "#B42318",
-            fontSize: type.button,
-            fontWeight: "800",
+            marginLeft: 14,
+            color: "#101828",
+            fontSize: 17,
+            fontWeight: "600",
           }}
         >
-          Logout
+          Logging out...
         </Text>
-      </Pressable>
+      </View>
+    ) : (
+  <View
+    style={{
+      width: "100%",
+      maxWidth: 330,
+      overflow: "hidden",
+      borderRadius: 22,
+      backgroundColor: "#FFFFFF",
+    }}
+  >
+    {/* Title */}
+<View
+  style={{
+    paddingHorizontal: 22,
+    paddingVertical: 22,
+  }}
+>
+  <Text
+    style={{
+      width: "100%",
+
+      color: "#101828",
+
+      fontSize: 20,
+      lineHeight: 27,
+
+      fontWeight: "800",
+
+      textAlign: "center",
+      textAlignVertical: "center",
+
+      includeFontPadding: false,
+    }}
+  >
+    Log out of your account?
+  </Text>
+</View>
+
+    <View
+      style={{
+        height: 1,
+        backgroundColor: "#EAECF0",
+      }}
+    />
+
+{/* Confirm Logout */}
+<Pressable
+  disabled={loggingOut}
+  onPress={handleLogout}
+  style={({ pressed }) => ({
+    width: "100%",
+    opacity:
+      pressed ? 0.65 : 1,
+  })}
+>
+  <View
+    style={{
+      width: "100%",
+      height: 60,
+
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <Text
+      style={{
+        color: "#D92D20",
+
+        fontSize: 16,
+        lineHeight: 20,
+
+        fontWeight: "700",
+
+        textAlign: "center",
+        includeFontPadding: false,
+      }}
+    >
+      Log Out
+    </Text>
+  </View>
+</Pressable>
+
+<View
+  style={{
+    width: "100%",
+    height: 1,
+    backgroundColor: "#EAECF0",
+  }}
+/>
+
+{/* Cancel */}
+<Pressable
+  onPress={() =>
+    setLogoutModalVisible(false)
+  }
+  style={({ pressed }) => ({
+    width: "100%",
+    opacity:
+      pressed ? 0.65 : 1,
+  })}
+>
+  <View
+    style={{
+      width: "100%",
+      height: 60,
+
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <Text
+      style={{
+        color: "#101828",
+
+        fontSize: 16,
+        lineHeight: 20,
+
+        fontWeight: "600",
+
+        textAlign: "center",
+        includeFontPadding: false,
+      }}
+    >
+      Cancel
+    </Text>
+  </View>
+</Pressable>
+  </View>
+)}
+  </View>
+</Modal>
+
     </AppScreen>
   );
 }

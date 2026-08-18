@@ -6,11 +6,13 @@ import {
   View,
 } from "react-native";
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Calendar } from "react-native-calendars";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -19,6 +21,42 @@ import AppScreen from "@/components/common/AppScreen";
 import ScreenHeader from "@/components/ui/ScreenHeader";
 import { useResponsive } from "@/hooks/useResponsive";
 import { COLORS } from "@/theme";
+
+import NetInfo from "@react-native-community/netinfo";
+
+function getCalendarDateKey(
+  value,
+) {
+  if (!value) {
+    return null;
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1,
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      date.getDate(),
+    ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 export default function CalendarScreen() {
   const [events, setEvents] =
@@ -30,48 +68,157 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] =
     useState(null);
 
+    const wasOfflineRef =
+  useRef(false);
+
   const {
     isCompactPhone,
     type,
     layout,
   } = useResponsive();
 
-  const fetchCalendarEvents = async (
-    showLoader = true,
-  ) => {
-    try {
-      if (showLoader) {
-        setLoading(true);
+const fetchCalendarEvents =
+  useCallback(
+    async (
+      showLoader = true,
+    ) => {
+      try {
+        if (showLoader) {
+          setLoading(true);
+        }
+
+        const response =
+          await apiClient(
+            "/events/calendar/all",
+          );
+
+        setEvents(
+          Array.isArray(
+            response?.events,
+          )
+            ? response.events
+            : [],
+        );
+
+        return true;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "calendar fetch error:",
+            error?.message ||
+              error,
+          );
+        }
+
+        return false;
+      } finally {
+        if (showLoader) {
+          setLoading(false);
+        }
       }
-
-      const response = await apiClient(
-        "/events/calendar/all",
-      );
-
-      setEvents(
-        response?.events || [],
-      );
-    } catch (error) {
-      console.log(
-        "calendar fetch error:",
-        error,
-      );
-
-      Alert.alert(
-        "Unable to load calendar",
-        error?.message ||
-          "Please try again.",
-      );
-    } finally {
-      if (showLoader) {
-        setLoading(false);
-      }
-    }
-  };
+    },
+    [],
+  );
 
   useEffect(() => {
-    fetchCalendarEvents(true);
-  }, []);
+  fetchCalendarEvents(true);
+}, [fetchCalendarEvents]);
+
+useFocusEffect(
+  useCallback(() => {
+    let reconnectTimer = null;
+
+    const unsubscribe =
+      NetInfo.addEventListener(
+        (state) => {
+          const isOffline =
+            state.isConnected === false ||
+            state.isInternetReachable ===
+              false;
+
+          if (isOffline) {
+            wasOfflineRef.current =
+              true;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+
+              reconnectTimer = null;
+            }
+
+            return;
+          }
+
+          const isOnline =
+            state.isConnected === true &&
+            state.isInternetReachable !==
+              false;
+
+          if (
+            isOnline &&
+            wasOfflineRef.current
+          ) {
+            wasOfflineRef.current =
+              false;
+
+            if (reconnectTimer) {
+              clearTimeout(
+                reconnectTimer,
+              );
+            }
+
+            reconnectTimer =
+  setTimeout(
+    async () => {
+      const success =
+        await fetchCalendarEvents(
+          false,
+        );
+
+      reconnectTimer =
+        null;
+
+      /*
+       * Retry once if Android
+       * reports online before the
+       * network is fully usable.
+       */
+      if (!success) {
+        reconnectTimer =
+          setTimeout(() => {
+            void fetchCalendarEvents(
+              false,
+            );
+
+            reconnectTimer =
+              null;
+          }, 1500);
+      }
+    },
+    700,
+  );
+
+
+          }
+        },
+      );
+
+    return () => {
+      unsubscribe();
+
+      if (reconnectTimer) {
+        clearTimeout(
+          reconnectTimer,
+        );
+      }
+
+      wasOfflineRef.current =
+        false;
+    };
+  }, [fetchCalendarEvents]),
+);
 
   const handleRefresh = async () => {
     try {
@@ -82,32 +229,31 @@ export default function CalendarScreen() {
     }
   };
 
-  const eventsByDate = useMemo(() => {
+ const eventsByDate =
+  useMemo(() => {
     const map = {};
 
-    events.forEach((event) => {
-      if (!event?.date) return;
+    events.forEach(
+      (event) => {
+        const dateKey =
+          getCalendarDateKey(
+            event?.startAt ||
+              event?.date,
+          );
 
-      const date = new Date(
-        event.date,
-      );
+        if (!dateKey) {
+          return;
+        }
 
-      if (
-        Number.isNaN(date.getTime())
-      ) {
-        return;
-      }
+        if (!map[dateKey]) {
+          map[dateKey] = [];
+        }
 
-      const dateKey = date
-        .toISOString()
-        .split("T")[0];
-
-      if (!map[dateKey]) {
-        map[dateKey] = [];
-      }
-
-      map[dateKey].push(event);
-    });
+        map[dateKey].push(
+          event,
+        );
+      },
+    );
 
     return map;
   }, [events]);
@@ -160,14 +306,14 @@ export default function CalendarScreen() {
       return;
     }
 
-    router.push({
-      pathname:
-        "/(protected)/events/[id]",
-      params: {
-        id: String(event._id),
-        source: "calendar",
-      },
-    });
+    router.navigate({
+  pathname:
+    "/(protected)/events/[id]",
+  params: {
+    id: String(event._id),
+    source: "calendar",
+  },
+});
   };
 
   if (loading) {

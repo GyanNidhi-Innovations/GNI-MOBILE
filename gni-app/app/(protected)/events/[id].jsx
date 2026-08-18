@@ -16,6 +16,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -25,6 +26,9 @@ import {
 } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
+
+
+import NetInfo from "@react-native-community/netinfo";
 
 import {
   SafeAreaView,
@@ -215,6 +219,15 @@ const navigationSource =
   const [loading, setLoading] =
     useState(true);
 
+    const [loadError, setLoadError] =
+  useState(null);
+
+const wasOfflineRef =
+  useRef(false);
+
+  const loadedEventIdRef =
+  useRef(null);
+
   const [
     imageFailed,
     setImageFailed,
@@ -232,50 +245,104 @@ const navigationSource =
 
 
 
-  const handleBack = useCallback(() => {
-  if (posterViewerVisible) {
-    setPosterViewerVisible(false);
-    return;
-  }
-
-  switch (navigationSource) {
-    case "notification":
-      router.replace(
-        "/(protected)/notifications",
-      );
+const handleBack =
+  useCallback(() => {
+    /*
+     * Close poster first if
+     * full-screen poster is open.
+     */
+    if (posterViewerVisible) {
+      setPosterViewerVisible(false);
       return;
+    }
 
-    case "calendar":
-      router.replace(
-        "/(protected)/calendar",
+    /*
+     * Decide whether this event
+     * belongs in Upcoming or Past.
+     *
+     * This uses the same idea as
+     * the Events page: end date
+     * first, then start date.
+     */
+    const comparisonDate =
+      toDate(event?.endAt) ||
+      toDate(
+        event?.startAt ||
+          event?.date,
       );
-      return;
 
-    case "home":
-      router.replace(
-        "/(protected)/home",
-      );
-      return;
+    const eventTab =
+      comparisonDate &&
+      comparisonDate < new Date()
+        ? "past"
+        : "upcoming";
 
-    case "profile":
-      router.replace(
-        "/(protected)/profile",
-      );
-      return;
+    switch (navigationSource) {
+      /*
+       * IMPORTANT:
+       *
+       * An event opened from an
+       * Alert should return to the
+       * appropriate Events tab,
+       * not back to Alerts.
+       */
+      case "notification":
+        router.replace({
+          pathname:
+            "/(protected)/events",
 
-    case "events":
-      router.back();
-      return;
+          params: {
+            tab: eventTab,
+          },
+        });
+        return;
 
-    default:
-      router.replace(
-        "/(protected)/events",
-      );
-  }
-}, [
-  navigationSource,
-  posterViewerVisible,
-]);
+      case "calendar":
+        router.dismissAll();
+
+        router.navigate(
+          "/(protected)/calendar",
+        );
+        return;
+
+      case "home":
+        router.replace(
+          "/(protected)/home",
+        );
+        return;
+
+      case "profile":
+        router.replace(
+          "/(protected)/profile",
+        );
+        return;
+
+      /*
+       * If the event was opened
+       * directly from Events,
+       * router.back() preserves the
+       * exact existing Events screen
+       * and its selected tab.
+       */
+      case "events":
+        router.back();
+        return;
+
+      default:
+        router.replace({
+          pathname:
+            "/(protected)/events",
+
+          params: {
+            tab: eventTab,
+          },
+        });
+    }
+  }, [
+    navigationSource,
+    posterViewerVisible,
+    event,
+  ]);
 
 
 
@@ -310,42 +377,274 @@ useEffect(() => {
   const horizontalPadding =
     isCompactPhone ? 14 : 16;
 
-  const loadEvent =
-    useCallback(async () => {
-      if (!eventId) {
-        setEvent(null);
-        setLoading(false);
-        return;
-      }
+ const loadEvent =
+  useCallback(async () => {
+    const normalizedEventId =
+      String(
+        eventId || "",
+      ).trim();
 
-      try {
+    if (!normalizedEventId) {
+      loadedEventIdRef.current =
+        null;
+
+      setEvent(null);
+
+      setLoadError(
+        "not-found",
+      );
+
+      setLoading(false);
+
+      return false;
+    }
+
+    /*
+     * If this exact event has
+     * already loaded successfully,
+     * refresh it silently.
+     */
+    const alreadyHasEvent =
+      loadedEventIdRef.current ===
+      normalizedEventId;
+
+    try {
+      /*
+       * Full-screen loader only
+       * for the first load.
+       */
+      if (!alreadyHasEvent) {
         setLoading(true);
+      }
 
-        const response =
-          await getEventById(
-            eventId,
-          );
+      const response =
+        await getEventById(
+          normalizedEventId,
+        );
 
-        setEvent(
-          response?.event ||
-            response ||
-            null,
-        );
-      } catch (error) {
-        console.log(
-          "getEventById error:",
-          error,
-        );
+      const fetchedEvent =
+        response?.event ||
+        (response?._id
+          ? response
+          : null);
+
+      /*
+       * Successful request but no
+       * matching event.
+       */
+      if (!fetchedEvent) {
+        loadedEventIdRef.current =
+          null;
 
         setEvent(null);
-      } finally {
+
+        setLoadError(
+          "not-found",
+        );
+
+        return false;
+      }
+
+      /*
+       * Successful fetch.
+       */
+      loadedEventIdRef.current =
+        normalizedEventId;
+
+      setEvent(
+        fetchedEvent,
+      );
+
+      setLoadError(null);
+
+      return true;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          "getEventById error:",
+          error?.message ||
+            error,
+        );
+      }
+
+      const message =
+        String(
+          error?.message ||
+            "",
+        ).toLowerCase();
+
+      /*
+       * A confirmed missing/deleted
+       * event is different from a
+       * temporary network problem.
+       */
+      if (
+        message.includes(
+          "not found",
+        )
+      ) {
+        loadedEventIdRef.current =
+          null;
+
+        setEvent(null);
+
+        setLoadError(
+          "not-found",
+        );
+
+        return false;
+      }
+
+      /*
+       * IMPORTANT:
+       *
+       * If this event was already
+       * successfully loaded, keep
+       * it visible when a refresh
+       * fails.
+       */
+      if (alreadyHasEvent) {
+        return false;
+      }
+
+      /*
+       * First load failed.
+       * Determine whether this is
+       * an offline condition.
+       */
+      try {
+        const networkState =
+          await NetInfo.fetch();
+
+        const offline =
+          networkState
+            .isConnected === false ||
+          networkState
+            .isInternetReachable ===
+            false;
+
+        setLoadError(
+          offline
+            ? "offline"
+            : "error",
+        );
+      } catch {
+        setLoadError(
+          "error",
+        );
+      }
+
+      return false;
+    } finally {
+      if (!alreadyHasEvent) {
         setLoading(false);
       }
-    }, [eventId]);
+    }
+  }, [eventId]);
 
+  
   useEffect(() => {
     loadEvent();
   }, [loadEvent]);
+
+  useEffect(() => {
+  let reconnectTimer = null;
+  let retryTimer = null;
+
+  const unsubscribe =
+    NetInfo.addEventListener(
+      (state) => {
+        const isOffline =
+          state.isConnected ===
+            false ||
+          state
+            .isInternetReachable ===
+            false;
+
+        if (isOffline) {
+  wasOfflineRef.current =
+    true;
+
+  if (reconnectTimer) {
+    clearTimeout(
+      reconnectTimer,
+    );
+
+    reconnectTimer = null;
+  }
+
+  if (retryTimer) {
+    clearTimeout(
+      retryTimer,
+    );
+
+    retryTimer = null;
+  }
+
+  return;
+}
+
+        const isOnline =
+          state.isConnected ===
+            true &&
+          state
+            .isInternetReachable !==
+            false;
+
+        if (
+          isOnline &&
+          wasOfflineRef.current
+        ) {
+          wasOfflineRef.current =
+            false;
+
+          reconnectTimer =
+            setTimeout(
+              async () => {
+                const success =
+                  await loadEvent();
+
+                reconnectTimer =
+                  null;
+
+                if (!success) {
+                  retryTimer =
+                    setTimeout(
+                      () => {
+                        void loadEvent();
+
+                        retryTimer =
+                          null;
+                      },
+                      1500,
+                    );
+                }
+              },
+              700,
+            );
+        }
+      },
+    );
+
+  return () => {
+    unsubscribe();
+
+    if (reconnectTimer) {
+      clearTimeout(
+        reconnectTimer,
+      );
+    }
+
+    if (retryTimer) {
+      clearTimeout(
+        retryTimer,
+      );
+    }
+
+    wasOfflineRef.current =
+      false;
+  };
+}, [loadEvent]);
 
   const startAt =
     useMemo(
@@ -448,59 +747,124 @@ useEffect(() => {
     );
   }
 
-  if (!event) {
-    return (
-      <SafeAreaView
-        edges={["top"]}
-        style={styles.safeArea}
+ if (loadError || !event) {
+  const offline =
+    loadError === "offline";
+
+  const notFound =
+    loadError === "not-found";
+
+  return (
+    <SafeAreaView
+      edges={["top"]}
+      style={styles.safeArea}
+    >
+      <View
+        style={
+          styles.notFoundContainer
+        }
       >
         <View
-          style={
-            styles.notFoundContainer
-          }
+          style={{
+            width: 72,
+            height: 72,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 24,
+            backgroundColor:
+              "#F2F4F7",
+          }}
         >
           <Ionicons
-            name="alert-circle-outline"
-            size={48}
+            name={
+              offline
+                ? "cloud-offline-outline"
+                : "alert-circle-outline"
+            }
+            size={38}
             color="#667085"
           />
+        </View>
 
-          <Text
-            style={{
-              marginTop: 16,
+        <Text
+          style={{
+            marginTop: 20,
+            color: "#101828",
+            fontSize:
+              type.sectionTitle,
+            fontWeight: "800",
+            textAlign: "center",
+          }}
+        >
+          {offline
+            ? "No internet connection"
+            : notFound
+              ? "Event not found"
+              : "Unable to load event"}
+        </Text>
 
-              color: "#101828",
+        <Text
+          style={{
+            marginTop: 8,
+            maxWidth: 300,
+            color: "#667085",
+            fontSize: type.body,
+            lineHeight:
+              type.body + 8,
+            textAlign: "center",
+          }}
+        >
+          {offline
+            ? "Reconnect to the internet. This event will refresh automatically."
+            : notFound
+              ? "This event may no longer be available."
+              : "We couldn't load this event right now. Please try again."}
+        </Text>
 
-              fontSize:
-                type.sectionTitle,
-
-              fontWeight: "800",
-            }}
-          >
-            Event not found
-          </Text>
-
+        {!notFound ? (
           <Pressable
-            onPress={handleBack}
-            style={styles.goBackButton}
+            onPress={() => {
+              void loadEvent();
+            }}
+            style={
+              styles.goBackButton
+            }
           >
             <Text
               style={{
                 color: "#FFFFFF",
-
                 fontSize:
                   type.button,
-
                 fontWeight: "800",
               }}
             >
-              Go back
+              Try again
             </Text>
           </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
+        ) : null}
+
+        <Pressable
+          onPress={handleBack}
+          style={{
+            marginTop: 18,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+          }}
+        >
+          <Text
+            style={{
+              color: "#667085",
+              fontSize: type.body,
+              fontWeight: "700",
+            }}
+          >
+            Go back
+          </Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
 
   const contentSections =
     Array.isArray(

@@ -132,20 +132,20 @@ export default function NotificationsScreen() {
         setUnreadNotificationCount(
           unreadItems,
         );
-      } catch (error) {
-        if (__DEV__) {
-  console.warn(
-    "fetch notifications error:",
-    error?.message || error,
-  );
-}
+     } catch (error) {
+  if (__DEV__) {
+    console.warn(
+      "fetch notifications error:",
+      error?.message || error,
+    );
+  }
 
-        Alert.alert(
-          "Unable to load alerts",
-          error?.message ||
-            "Please try again.",
-        );
-      }
+  /*
+   * Keep previously loaded alerts.
+   * Do not interrupt the user because
+   * a background refresh failed.
+   */
+}
     }, [
       userId,
       setUnreadNotificationCount,
@@ -539,7 +539,7 @@ export default function NotificationsScreen() {
           <View className="flex-1">
             <View className="flex-row items-start">
               <Text
-                numberOfLines={2}
+                
                 style={{
                   flex: 1,
                   marginRight: 8,
@@ -562,36 +562,32 @@ export default function NotificationsScreen() {
                     type.small,
                 }}
               >
-                {item.createdAt
+               {item.createdAt
                   ? new Date(
                       item.createdAt,
                     ).toLocaleTimeString(
-                      [],
+                      "en-IN",
                       {
-                        hour:
-                          "numeric",
-                        minute:
-                          "2-digit",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
                       },
                     )
                   : ""}
               </Text>
             </View>
 
-            <Text
-              numberOfLines={
-                isCompactPhone ? 3 : 4
-              }
-              style={{
-                marginTop: 7,
-                color: "#667085",
-                fontSize: type.body,
-                lineHeight:
-                  type.body + 8,
-              }}
-            >
-              {item.body}
-            </Text>
+           <Text
+  style={{
+    marginTop: 7,
+    color: "#667085",
+    fontSize: type.body,
+    lineHeight:
+      type.body + 8,
+  }}
+>
+  {item.body}
+</Text>
 
             {item?.data?.screen ===
             "events" ? (

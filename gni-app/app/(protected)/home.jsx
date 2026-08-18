@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Text,
   View,
@@ -100,20 +99,20 @@ export default function HomeScreen() {
             []
           ).slice(0, 3),
         );
-      } catch (error) {
-        if (__DEV__) {
-  console.warn(
-    "fetchDashboard error:",
-    error?.message || error,
-  );
-}
+   } catch (error) {
+  if (__DEV__) {
+    console.warn(
+      "fetchDashboard error:",
+      error?.message || error,
+    );
+  }
 
-        Alert.alert(
-          "Unable to refresh Home",
-          error?.message ||
-            "Please try again.",
-        );
-      } finally {
+  /*
+   * Keep previously loaded Home data.
+   * A temporary network failure should
+   * not interrupt the user.
+   */
+} finally {
         setLoading(false);
         hasLoadedOnceRef.current = true;
       }
@@ -469,18 +468,17 @@ new Date(
                         }}
                       >
                         {item.createdAt
-                          ? new Date(
-                              item.createdAt,
-                            ).toLocaleTimeString(
-                              [],
-                              {
-                                hour:
-                                  "numeric",
-                                minute:
-                                  "2-digit",
-                              },
-                            )
-                          : ""}
+                        ? new Date(
+                            item.createdAt,
+                          ).toLocaleTimeString(
+                            "en-IN",
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                            },
+                          )
+                        : ""}
                       </Text>
                     </View>
 
