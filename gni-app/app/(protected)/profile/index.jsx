@@ -33,10 +33,8 @@ import {
   deactivateCurrentNotificationInstallation,
 } from "@/services/notificationService";
 
-import useVexoPrivacyPause from "@/hooks/useVexoPrivacyPause";
 
 export default function ProfileScreen() {
-  useVexoPrivacyPause();
   const authUser = useAuthStore(
     (state) => state.user,
   );
@@ -77,6 +75,9 @@ export default function ProfileScreen() {
 const logoutLockedRef =
   useRef(false);
 
+
+  const profileNavigationLockedRef =
+  useRef(false);
 
   const wasOfflineRef =
   useRef(false);
@@ -160,11 +161,18 @@ const logoutLockedRef =
     ],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchProfile(true);
-    }, [fetchProfile]),
-  );
+ useFocusEffect(
+  useCallback(() => {
+    /*
+     * Profile is active again.
+     * Allow another navigation.
+     */
+    profileNavigationLockedRef.current =
+      false;
+
+    fetchProfile(true);
+  }, [fetchProfile]),
+);
 
  useFocusEffect(
   useCallback(() => {
@@ -270,6 +278,25 @@ const logoutLockedRef =
       setRefreshing(false);
     }
   };
+
+const handleProfileNavigation = (
+  pathname,
+) => {
+  if (
+    profileNavigationLockedRef.current
+  ) {
+    return;
+  }
+
+  /*
+   * Prevent another rapid press
+   * before navigation completes.
+   */
+  profileNavigationLockedRef.current =
+    true;
+
+  router.navigate(pathname);
+};
 
  
 
@@ -747,10 +774,10 @@ const visibleProfileFields = [
   description="Get help with your account or the app."
   isCompactPhone={isCompactPhone}
   onPress={() =>
-    router.navigate(
-      "/auth/support",
-    )
-  }
+  handleProfileNavigation(
+    "/(protected)/profile/support",
+  )
+}
 />
 
 <Divider />
@@ -761,10 +788,10 @@ const visibleProfileFields = [
   description="Learn how your information is handled."
   isCompactPhone={isCompactPhone}
   onPress={() =>
-    router.navigate(
-      "/auth/privacy-policy",
-    )
-  }
+  handleProfileNavigation(
+    "/(protected)/profile/privacy-policy",
+  )
+}
 />
 
 <Divider />
@@ -775,10 +802,10 @@ const visibleProfileFields = [
   description="Review the terms for using GyanNidhi."
   isCompactPhone={isCompactPhone}
   onPress={() =>
-    router.navigate(
-      "/auth/terms-and-conditions",
-    )
-  }
+  handleProfileNavigation(
+    "/(protected)/profile/terms-and-conditions",
+  )
+}
 />
       </View>
 

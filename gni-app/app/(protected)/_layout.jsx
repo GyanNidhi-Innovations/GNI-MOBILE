@@ -1,5 +1,9 @@
 import { useEffect, useCallback, useRef } from "react";
-import { Tabs, useRouter } from "expo-router";
+import {
+  ActivityIndicator,
+  View,
+} from "react-native";
+import {  Redirect, Tabs, useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,7 +20,19 @@ import { COLORS } from "@/theme";
 
 export default function ProtectedLayout() {
   const user = useAuthStore((state) => state.user);
+  const token =
+  useAuthStore(
+    (state) => state.token,
+  );
+
+const authLoading =
+  useAuthStore(
+    (state) =>
+      state.authLoading,
+  );
   const userId = user?.id || user?._id;
+
+  
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -255,6 +271,32 @@ export default function ProtectedLayout() {
   router,
   refreshUnreadCount,
 ]);
+
+if (authLoading) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      <ActivityIndicator
+        size="small"
+        color={COLORS.primary}
+      />
+    </View>
+  );
+}
+
+if (!user || !token) {
+  return (
+    <Redirect
+      href="/auth/login"
+    />
+  );
+}
 
   const notificationBadge =
     unreadCount > 0
