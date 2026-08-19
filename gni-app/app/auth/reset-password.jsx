@@ -23,7 +23,6 @@ import {
   RADIUS,
 } from "../../src/theme";
 
-import useVexoPrivacyPause from "@/hooks/useVexoPrivacyPause";
 
 const validatePassword = (password) =>
   password.length >= 8 &&
@@ -33,7 +32,6 @@ const validatePassword = (password) =>
   /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
 
 export default function ResetPasswordScreen() {
-  useVexoPrivacyPause();
   const params = useLocalSearchParams();
 
   const token = Array.isArray(params.token)

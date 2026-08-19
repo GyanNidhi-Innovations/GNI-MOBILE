@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -86,11 +85,17 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] =
     useState(false);
 
+  const [loadError, setLoadError] =
+  useState(null);
+
   const hasLoadedOnceRef =
     useRef(false);
 
 
   const wasOfflineRef =
+  useRef(false);
+
+  const navigationLockedRef =
   useRef(false);
 
   const userId =
@@ -104,56 +109,89 @@ export default function NotificationsScreen() {
     layout,
   } = useResponsive();
 
-  const fetchNotifications =
-    useCallback(async () => {
+ const fetchNotifications =
+  useCallback(async () => {
+    try {
+      if (!userId) {
+        setNotifications([]);
+        setUnreadNotificationCount(0);
+        setLoadError(null);
+
+        return true;
+      }
+
+      const response = await apiClient(
+        `/notifications/user/${userId}`,
+      );
+
+      const fetchedNotifications =
+        response?.notifications || [];
+
+      setNotifications(
+        fetchedNotifications,
+      );
+
+      const unreadItems =
+        fetchedNotifications.filter(
+          (item) => !item.read,
+        ).length;
+
+      setUnreadNotificationCount(
+        unreadItems,
+      );
+
+      /*
+       * Successful request.
+       */
+      setLoadError(null);
+
+      return true;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          "fetch notifications error:",
+          error?.message || error,
+        );
+      }
+
+      /*
+       * Keep previously loaded alerts.
+       * Only determine why the refresh
+       * failed.
+       */
       try {
-        if (!userId) {
-          setNotifications([]);
-          setUnreadNotificationCount(0);
-          return;
+        const networkState =
+          await NetInfo.fetch();
+
+        const isOffline =
+          networkState.isConnected ===
+            false ||
+          networkState
+            .isInternetReachable ===
+            false;
+
+        if (isOffline) {
+          setLoadError("offline");
+        } else {
+          setLoadError("error");
         }
+      } catch {
+        setLoadError("offline");
+      }
 
-        const response = await apiClient(
-          `/notifications/user/${userId}`,
-        );
-
-        const fetchedNotifications =
-          response?.notifications || [];
-
-        setNotifications(
-          fetchedNotifications,
-        );
-
-        const unreadItems =
-          fetchedNotifications.filter(
-            (item) => !item.read,
-          ).length;
-
-        setUnreadNotificationCount(
-          unreadItems,
-        );
-     } catch (error) {
-  if (__DEV__) {
-    console.warn(
-      "fetch notifications error:",
-      error?.message || error,
-    );
-  }
-
-  /*
-   * Keep previously loaded alerts.
-   * Do not interrupt the user because
-   * a background refresh failed.
-   */
-}
-    }, [
-      userId,
-      setUnreadNotificationCount,
-    ]);
+      return false;
+    }
+  }, [
+    userId,
+    setUnreadNotificationCount,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+
+       navigationLockedRef.current =
+      false;
 
       const loadNotifications =
         async () => {
@@ -164,10 +202,14 @@ export default function NotificationsScreen() {
               setLoading(true);
             }
 
-            await fetchNotifications();
+            const success =
+  await fetchNotifications();
 
-            hasLoadedOnceRef.current =
-              true;
+if (success) {
+  hasLoadedOnceRef.current =
+    true;
+}
+
           } finally {
             if (active) {
               setLoading(false);
@@ -269,62 +311,98 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleMarkAsRead = async (
-    notificationId,
-  ) => {
-    try {
-      await apiClient(
-        `/notifications/${notificationId}/read`,
-        {
-          method: "PATCH",
-        },
-      );
+ const handleMarkAsRead = async (
+  notificationId,
+) => {
+  try {
+    await apiClient(
+      `/notifications/${notificationId}/read`,
+      {
+        method: "PATCH",
+      },
+    );
 
-      let wasUnread = false;
+    let wasUnread = false;
 
-      setNotifications((previous) =>
-        previous.map((item) => {
-          if (
-            item._id ===
-              notificationId &&
-            !item.read
-          ) {
-            wasUnread = true;
+    setNotifications((previous) =>
+      previous.map((item) => {
+        if (
+          item._id ===
+            notificationId &&
+          !item.read
+        ) {
+          wasUnread = true;
 
-            return {
-              ...item,
-              read: true,
-            };
-          }
+          return {
+            ...item,
+            read: true,
+          };
+        }
 
-          return item;
-        }),
-      );
+        return item;
+      }),
+    );
 
-      if (wasUnread) {
-        decrementUnreadNotificationCount();
-      }
-    } catch (error) {
-      if (__DEV__) {
-  console.warn(
-    "mark notification read error:",
-    error?.message || error,
-  );
-}
+    if (wasUnread) {
+      decrementUnreadNotificationCount();
+    }
 
-      Alert.alert(
-        "Unable to update alert",
-        error?.message ||
-          "Please try again.",
+    return true;
+  } catch (error) {
+    if (__DEV__) {
+      console.warn(
+        "mark notification read error:",
+        error?.message || error,
       );
     }
-  };
+
+    /*
+     * Marking an alert as read is a
+     * background synchronization action.
+     *
+     * Do not interrupt navigation if
+     * the request fails because of
+     * network/server issues.
+     *
+     * Keep the alert unread locally.
+     * The next refresh/reconnect will
+     * synchronize with the backend.
+     */
+    return false;
+  }
+};
+
+
+
 
   const handleNotificationPress =
-    async (item) => {
-      if (!item) return;
+  async (item) => {
+    if (!item) {
+      return;
+    }
 
-      if (!item.read && item._id) {
+    /*
+     * IMPORTANT:
+     * Lock immediately, before any
+     * await/API call happens.
+     *
+     * This prevents a rapid second tap
+     * from starting another navigation.
+     */
+    if (
+      navigationLockedRef.current
+    ) {
+      return;
+    }
+
+    navigationLockedRef.current =
+      true;
+
+    try {
+      if (
+        !item.read &&
+        item._id
+      ) {
         await handleMarkAsRead(
           item._id,
         );
@@ -338,13 +416,15 @@ export default function NotificationsScreen() {
         screen === "events" &&
         item?.data?.eventId
       ) {
-        router.push({
+        router.navigate({
           pathname:
             "/(protected)/events/[id]",
+
           params: {
             id: String(
               item.data.eventId,
             ),
+
             source:
               "notification",
           },
@@ -354,32 +434,59 @@ export default function NotificationsScreen() {
       }
 
       if (screen === "events") {
-        router.push(
+        router.navigate(
           "/(protected)/events",
         );
+
         return;
       }
 
       if (screen === "courses") {
-        router.push(
+        router.navigate(
           "/(protected)/courses",
         );
+
         return;
       }
 
       if (screen === "calendar") {
-        router.push(
+        router.navigate(
           "/(protected)/calendar",
         );
+
         return;
       }
 
       if (screen === "profile") {
-        router.push(
+        router.navigate(
           "/(protected)/profile",
         );
+
+        return;
       }
-    };
+
+      /*
+       * Nothing was navigated to,
+       * so unlock again.
+       */
+      navigationLockedRef.current =
+        false;
+    } catch (error) {
+      /*
+       * Navigation/action failed.
+       * Allow another attempt.
+       */
+      navigationLockedRef.current =
+        false;
+
+      if (__DEV__) {
+        console.warn(
+          "notification press error:",
+          error?.message || error,
+        );
+      }
+    }
+  };
 
   const sectionedNotifications =
     useMemo(() => {
@@ -644,7 +751,87 @@ export default function NotificationsScreen() {
     />
   );
 
-  const renderEmpty = () => (
+  const renderEmpty = () => {
+  if (loadError === "offline") {
+    return (
+      <View className="items-center justify-center px-8 py-24">
+        <View className="h-16 w-16 items-center justify-center rounded-3xl bg-white">
+          <Ionicons
+            name="cloud-offline-outline"
+            size={30}
+            color="#667085"
+          />
+        </View>
+
+        <Text
+          style={{
+            marginTop: 18,
+            textAlign: "center",
+            color: "#101828",
+            fontSize: type.cardTitle,
+            fontWeight: "800",
+          }}
+        >
+          No internet connection
+        </Text>
+
+        <Text
+          style={{
+            marginTop: 8,
+            textAlign: "center",
+            color: "#667085",
+            fontSize: type.body,
+            lineHeight:
+              type.body + 8,
+          }}
+        >
+          Connect to the internet to
+          load your alerts.
+        </Text>
+      </View>
+    );
+  }
+
+  if (loadError === "error") {
+    return (
+      <View className="items-center justify-center px-8 py-24">
+        <View className="h-16 w-16 items-center justify-center rounded-3xl bg-white">
+          <Ionicons
+            name="alert-circle-outline"
+            size={30}
+            color="#667085"
+          />
+        </View>
+
+        <Text
+          style={{
+            marginTop: 18,
+            textAlign: "center",
+            color: "#101828",
+            fontSize: type.cardTitle,
+            fontWeight: "800",
+          }}
+        >
+          Unable to load alerts
+        </Text>
+
+        <Text
+          style={{
+            marginTop: 8,
+            textAlign: "center",
+            color: "#667085",
+            fontSize: type.body,
+            lineHeight:
+              type.body + 8,
+          }}
+        >
+          Please try again shortly.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
     <View className="items-center justify-center px-8 py-24">
       <View className="h-16 w-16 items-center justify-center rounded-3xl bg-white">
         <Ionicons
@@ -672,7 +859,8 @@ export default function NotificationsScreen() {
           textAlign: "center",
           color: "#667085",
           fontSize: type.body,
-          lineHeight: type.body + 8,
+          lineHeight:
+            type.body + 8,
         }}
       >
         Event reminders and important
@@ -680,6 +868,9 @@ export default function NotificationsScreen() {
       </Text>
     </View>
   );
+};
+
+
 
   if (loading) {
     return (
