@@ -15,7 +15,7 @@ export default function Index() {
   }
 
   if (token) {
-    return <Redirect href="/(protected)/home" />;
+    return <Redirect href="/home" />;
   }
 
   return <Redirect href="/auth/login" />;

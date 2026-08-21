@@ -76,8 +76,7 @@ const logoutLockedRef =
   useRef(false);
 
 
-  const profileNavigationLockedRef =
-  useRef(false);
+  
 
   const wasOfflineRef =
   useRef(false);
@@ -163,13 +162,6 @@ const logoutLockedRef =
 
  useFocusEffect(
   useCallback(() => {
-    /*
-     * Profile is active again.
-     * Allow another navigation.
-     */
-    profileNavigationLockedRef.current =
-      false;
-
     fetchProfile(true);
   }, [fetchProfile]),
 );
@@ -282,19 +274,6 @@ const logoutLockedRef =
 const handleProfileNavigation = (
   pathname,
 ) => {
-  if (
-    profileNavigationLockedRef.current
-  ) {
-    return;
-  }
-
-  /*
-   * Prevent another rapid press
-   * before navigation completes.
-   */
-  profileNavigationLockedRef.current =
-    true;
-
   router.navigate(pathname);
 };
 
@@ -775,7 +754,7 @@ const visibleProfileFields = [
   isCompactPhone={isCompactPhone}
   onPress={() =>
   handleProfileNavigation(
-    "/(protected)/profile/support",
+    "/support",
   )
 }
 />
@@ -789,7 +768,7 @@ const visibleProfileFields = [
   isCompactPhone={isCompactPhone}
   onPress={() =>
   handleProfileNavigation(
-    "/(protected)/profile/privacy-policy",
+    "/privacy-policy",
   )
 }
 />
@@ -803,7 +782,7 @@ const visibleProfileFields = [
   isCompactPhone={isCompactPhone}
   onPress={() =>
   handleProfileNavigation(
-    "/(protected)/profile/terms-and-conditions",
+    "/terms-and-conditions",
   )
 }
 />
