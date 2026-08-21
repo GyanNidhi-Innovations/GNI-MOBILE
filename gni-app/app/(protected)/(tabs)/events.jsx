@@ -144,13 +144,8 @@ function EventCard({
               uri: item.image,
             }}
             resizeMode="cover"
-            onError={(error) => {
-              console.log(
-                "Event poster error:",
-                error?.nativeEvent
-                  ?.error,
-              );
-
+            onError={() => {
+            
               setImageFailed(true);
             }}
             style={styles.posterImage}
@@ -225,7 +220,7 @@ function EventCard({
                     type.small,
                 }}
               >
-                â€¢
+                *
               </Text>
 
               <Text
@@ -374,6 +369,16 @@ const requestedTab =
     );
   }
 }, [requestedTab]);
+
+
+const handleTabChange =
+  useCallback((nextTab) => {
+    setActiveTab(nextTab);
+
+    router.setParams({
+      tab: nextTab,
+    });
+  }, []);
 
   const [events, setEvents] =
     useState([]);
@@ -599,79 +604,104 @@ const requestedTab =
       }
     }, [fetchEvents]);
 
-  const visibleEvents =
-    useMemo(() => {
-      const now = new Date();
+ const categorizedEvents =
+  useMemo(() => {
+    const now = new Date();
 
-      const availableEvents =
-        events.filter(
-          (event) =>
-            event?.status !==
-              "draft" &&
-            event?.status !==
-              "cancelled",
-        );
+    const availableEvents =
+      events.filter(
+        (event) =>
+          event?.status !==
+            "draft" &&
+          event?.status !==
+            "cancelled",
+      );
 
-      const upcomingEvents =
-        availableEvents
-          .filter((event) => {
-            const end =
-              getEventEnd(event);
+    const upcomingEvents =
+      availableEvents
+        .filter((event) => {
+          const end =
+            getEventEnd(event);
+
+          return (
+            !end ||
+            end >= now
+          );
+        })
+        .sort(
+          (
+            first,
+            second,
+          ) => {
+            const firstCreatedAt =
+              toDate(
+                first?.createdAt,
+              )?.getTime() ?? 0;
+
+            const secondCreatedAt =
+              toDate(
+                second?.createdAt,
+              )?.getTime() ?? 0;
 
             return (
-              !end ||
-              end >= now
+              secondCreatedAt -
+              firstCreatedAt
             );
-          })
-          .sort((first, second) => {
-  const firstCreatedAt =
-    toDate(first?.createdAt)
-      ?.getTime() ?? 0;
+          },
+        );
 
-  const secondCreatedAt =
-    toDate(second?.createdAt)
-      ?.getTime() ?? 0;
+    const pastEvents =
+      availableEvents
+        .filter((event) => {
+          const end =
+            getEventEnd(event);
 
-  return (
-    secondCreatedAt -
-    firstCreatedAt
-  );
-});
-
-      const pastEvents =
-        availableEvents
-          .filter((event) => {
-            const end =
-              getEventEnd(event);
-
-            return Boolean(
-              end &&
-                end < now,
-            );
-          })
-          .sort((first, second) => {
+          return Boolean(
+            end &&
+              end < now,
+          );
+        })
+        .sort(
+          (
+            first,
+            second,
+          ) => {
             const firstDate =
-              getEventStart(first)
-                ?.getTime() ?? 0;
+              getEventStart(
+                first,
+              )?.getTime() ?? 0;
 
             const secondDate =
-              getEventStart(second)
-                ?.getTime() ?? 0;
+              getEventStart(
+                second,
+              )?.getTime() ?? 0;
 
             return (
               secondDate -
               firstDate
             );
-          });
+          },
+        );
 
-      return activeTab ===
-        "upcoming"
-        ? upcomingEvents
-        : pastEvents;
-    }, [
-      activeTab,
-      events,
-    ]);
+    return {
+      upcomingEvents,
+      pastEvents,
+    };
+  }, [events]);
+
+const visibleEvents =
+  activeTab === "upcoming"
+    ? categorizedEvents.upcomingEvents
+    : categorizedEvents.pastEvents;
+
+const hasUpcomingEvents =
+  categorizedEvents
+    .upcomingEvents.length > 0;
+
+const hasPastEvents =
+  categorizedEvents
+    .pastEvents.length > 0;
+
 
    const handleOpenEvent =
   useCallback((event) => {
@@ -713,7 +743,10 @@ const requestedTab =
   );
 
   const renderEmptyState = () => {
-  if (loadError) {
+  if (
+  loadError &&
+  !loadedOnceRef.current
+) {
     const offline =
       loadError === "offline";
 
@@ -807,49 +840,104 @@ const requestedTab =
     );
   }
 
-  return (
-    <View
-      style={
-        styles.emptyContainer
-      }
+return (
+  <View
+    style={
+      styles.emptyContainer
+    }
+  >
+    <Ionicons
+      name="calendar-clear-outline"
+      size={44}
+      color="#667085"
+    />
+
+    <Text
+      style={{
+        marginTop: 16,
+        color: "#101828",
+        fontSize:
+          type.sectionTitle,
+        fontWeight: "800",
+        textAlign: "center",
+      }}
     >
-      <Ionicons
-        name="calendar-clear-outline"
-        size={44}
-        color="#667085"
-      />
+      {activeTab === "upcoming"
+        ? "No upcoming events"
+        : "No past events"}
+    </Text>
 
-      <Text
-        style={{
-          marginTop: 16,
-          color: "#101828",
-          fontSize:
-            type.sectionTitle,
-          fontWeight: "800",
-          textAlign: "center",
-        }}
-      >
-        {activeTab === "upcoming"
-          ? "No upcoming events"
-          : "No past events"}
-      </Text>
+    <Text
+      style={{
+        marginTop: 8,
+        marginBottom: 25,
+        color: "#667085",
+        fontSize: type.body,
+        lineHeight:
+          type.body + 8,
+        textAlign: "center",
+      }}
+    >
+      {activeTab === "upcoming"
+        ? "There are no scheduled events at the moment."
+        : "Completed events will appear here for reference."}
+    </Text>
+{activeTab === "upcoming" &&
+hasPastEvents ? (
+  <Pressable
+    onPress={() =>
+      handleTabChange("past")
+    }
+    style={({ pressed }) => ({
+      alignSelf: "center",
+      marginTop: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      opacity: pressed ? 0.6 : 1,
+    })}
+  >
+    <Text
+      style={{
+        color: "#0F5EFF",
+        fontSize: type.body,
+        fontWeight: "700",
+        textAlign: "center",
+      }}
+    >
+      View Past Events
+    </Text>
+  </Pressable>
+) : null}
 
-      <Text
-        style={{
-          marginTop: 8,
-          color: "#667085",
-          fontSize: type.body,
-          lineHeight:
-            type.body + 8,
-          textAlign: "center",
-        }}
-      >
-        {activeTab === "upcoming"
-          ? "New events will appear here when they are published."
-          : "Completed events will appear here for reference."}
-      </Text>
-    </View>
-  );
+
+{activeTab === "past" &&
+hasUpcomingEvents ? (
+  <Pressable
+    onPress={() =>
+       handleTabChange("upcoming")
+    }
+    style={({ pressed }) => ({
+      alignSelf: "center",
+      marginTop: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      opacity: pressed ? 0.6 : 1,
+    })}
+  >
+    <Text
+      style={{
+        color: "#0F5EFF",
+        fontSize: type.body,
+        fontWeight: "700",
+        textAlign: "center",
+      }}
+    >
+      View Upcoming Events
+    </Text>
+  </Pressable>
+) : null}
+  </View>
+);
 };
 
   const listHeader = (
@@ -888,7 +976,7 @@ const requestedTab =
   >
     <Pressable
       onPress={() =>
-        setActiveTab("upcoming")
+        handleTabChange("upcoming")
       }
       style={({ pressed }) => ({
         width: "100%",
@@ -950,7 +1038,7 @@ const requestedTab =
   >
     <Pressable
       onPress={() =>
-        setActiveTab("past")
+         handleTabChange("past")
       }
       style={({ pressed }) => ({
         width: "100%",
@@ -1029,7 +1117,7 @@ const requestedTab =
         ItemSeparatorComponent={() => (
   <View
     style={{
-      height: 32,
+      height: 24,
     }}
   />
 )}
@@ -1096,11 +1184,7 @@ const styles = StyleSheet.create({
   eventCard: {
   marginHorizontal: 14,
 
-  /*
-   * Strong visible gap between
-   * one event and the next.
-   */
-  marginBottom: 28,
+ 
 
   overflow: "hidden",
 
