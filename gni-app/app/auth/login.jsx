@@ -66,7 +66,7 @@ const handleLogin = async () => {
     email.trim().toLowerCase();
 
   const cleanPassword =
-    password.trim();
+    password;
 
   setEmailError("");
   setPasswordError("");
@@ -164,7 +164,7 @@ const handleLogin = async () => {
     });
 
     router.replace(
-      "/(protected)/home",
+      "/home",
     );
   } catch (error) {
     const message =

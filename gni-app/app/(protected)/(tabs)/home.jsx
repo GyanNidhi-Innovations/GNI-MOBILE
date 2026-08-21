@@ -289,7 +289,7 @@ new Date(
             fontWeight: "800",
           }}
         >
-          {user?.name || "User"} 👋
+          {user?.name || "User"}
         </Text>
 
         <Text
@@ -348,8 +348,8 @@ new Date(
 
           <Pressable
             onPress={() =>
-              router.push(
-                "/(protected)/notifications",
+              router.navigate(
+                "/notifications",
               )
             }
             hitSlop={10}
@@ -414,8 +414,8 @@ new Date(
               <Pressable
                 key={String(item._id)}
                 onPress={() =>
-                  router.push(
-                    "/(protected)/notifications",
+                  router.navigate(
+                    "/notifications",
                   )
                 }
                 style={{

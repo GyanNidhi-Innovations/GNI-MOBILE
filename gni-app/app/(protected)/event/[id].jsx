@@ -199,6 +199,10 @@ const navigationSource =
     ? source[0]
     : source;
 
+const openedFromNotification =
+  navigationSource ===
+  "notification";
+
   const insets =
     useSafeAreaInsets();
 
@@ -248,98 +252,86 @@ const wasOfflineRef =
 const handleBack =
   useCallback(() => {
     /*
-     * Close poster first if
-     * full-screen poster is open.
+     * Full-screen poster is UI state.
+     * Close it before changing routes.
      */
-    if (posterViewerVisible) {
-      setPosterViewerVisible(false);
+    if (
+      posterViewerVisible
+    ) {
+      setPosterViewerVisible(
+        false,
+      );
+
       return;
     }
 
     /*
-     * Decide whether this event
-     * belongs in Upcoming or Past.
+     * Notification is the only
+     * intentional special case.
      *
-     * This uses the same idea as
-     * the Events page: end date
-     * first, then start date.
+     * Event notifications should
+     * return to Events, selecting
+     * Past or Upcoming correctly.
      */
-    const comparisonDate =
-      toDate(event?.endAt) ||
-      toDate(
-        event?.startAt ||
-          event?.date,
-      );
-
-    const eventTab =
-      comparisonDate &&
-      comparisonDate < new Date()
-        ? "past"
-        : "upcoming";
-
-    switch (navigationSource) {
-      /*
-       * IMPORTANT:
-       *
-       * An event opened from an
-       * Alert should return to the
-       * appropriate Events tab,
-       * not back to Alerts.
-       */
-      case "notification":
-        router.replace({
-          pathname:
-            "/(protected)/events",
-
-          params: {
-            tab: eventTab,
-          },
-        });
-        return;
-
-      case "calendar":
-        router.dismissAll();
-
-        router.navigate(
-          "/(protected)/calendar",
+    if (
+      openedFromNotification
+    ) {
+      const comparisonDate =
+        toDate(
+          event?.endAt,
+        ) ||
+        toDate(
+          event?.startAt ||
+            event?.date,
         );
-        return;
 
-      case "home":
-        router.replace(
-          "/(protected)/home",
-        );
-        return;
+      const eventTab =
+        comparisonDate &&
+        comparisonDate <
+          new Date()
+          ? "past"
+          : "upcoming";
 
-      case "profile":
-        router.replace(
-          "/(protected)/profile",
-        );
-        return;
+      router.replace({
+        pathname:
+          "/events",
 
-      /*
-       * If the event was opened
-       * directly from Events,
-       * router.back() preserves the
-       * exact existing Events screen
-       * and its selected tab.
-       */
-      case "events":
-        router.back();
-        return;
+        params: {
+          tab:
+            eventTab,
+        },
+      });
 
-      default:
-        router.replace({
-          pathname:
-            "/(protected)/events",
-
-          params: {
-            tab: eventTab,
-          },
-        });
+      return;
     }
+
+    /*
+     * Normal Event Detail navigation:
+     *
+     * Calendar -> Detail -> Calendar
+     * Events   -> Detail -> Events
+     * Home     -> Detail -> Home
+     *
+     * The outer Stack already knows
+     * the previous screen.
+     */
+    if (
+      router.canGoBack()
+    ) {
+      router.back();
+
+      return;
+    }
+
+    /*
+     * Fallback for an Event Detail
+     * opened directly with no history.
+     */
+    router.replace(
+      "/events",
+    );
   }, [
-    navigationSource,
+    openedFromNotification,
     posterViewerVisible,
     event,
   ]);
@@ -351,15 +343,37 @@ useEffect(() => {
     BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        handleBack();
-        return true;
+        /*
+         * Only intercept Android Back
+         * when custom behavior is
+         * actually required.
+         */
+        if (
+          posterViewerVisible ||
+          openedFromNotification
+        ) {
+          handleBack();
+
+          return true;
+        }
+
+        /*
+         * For normal Event Details,
+         * allow Expo Router / React
+         * Navigation to handle Back.
+         */
+        return false;
       },
     );
 
   return () => {
     subscription.remove();
   };
-}, [handleBack]);
+}, [
+  handleBack,
+  posterViewerVisible,
+  openedFromNotification,
+]);
 
   const heroHeight =
     Math.min(

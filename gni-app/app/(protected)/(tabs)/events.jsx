@@ -225,7 +225,7 @@ function EventCard({
                     type.small,
                 }}
               >
-                •
+                â€¢
               </Text>
 
               <Text
@@ -681,13 +681,12 @@ const requestedTab =
 
     router.navigate({
       pathname:
-        "/(protected)/events/[id]",
+        "/event/[id]",
 
       params: {
         id: String(
           event._id,
         ),
-        source: "events",
       },
     });
   }, []);

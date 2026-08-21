@@ -418,7 +418,7 @@ if (success) {
       ) {
         router.navigate({
           pathname:
-            "/(protected)/events/[id]",
+            "/event/[id]",
 
           params: {
             id: String(
@@ -435,7 +435,7 @@ if (success) {
 
       if (screen === "events") {
         router.navigate(
-          "/(protected)/events",
+          "/events",
         );
 
         return;
@@ -443,7 +443,7 @@ if (success) {
 
       if (screen === "courses") {
         router.navigate(
-          "/(protected)/courses",
+          "/notifications",
         );
 
         return;
@@ -451,7 +451,7 @@ if (success) {
 
       if (screen === "calendar") {
         router.navigate(
-          "/(protected)/calendar",
+          "/calendar",
         );
 
         return;
@@ -459,7 +459,7 @@ if (success) {
 
       if (screen === "profile") {
         router.navigate(
-          "/(protected)/profile",
+          "/profile",
         );
 
         return;
@@ -743,7 +743,7 @@ if (success) {
   const renderHeader = () => (
     <ScreenHeader
       title="Alerts"
-      subtitle="Important event updates, reminders, registration notices, and account announcements—all in one place."
+      subtitle="Important event updates, reminders, registration notices, and account announcementsâ€”all in one place."
       style={{
         marginBottom:
           isCompactPhone ? 20 : 26,

@@ -19,7 +19,6 @@ export default {
         "./google-services.json",
       softwareKeyboardLayoutMode: "resize",
 
-      permissions: ["CAMERA", "RECORD_AUDIO"],
         icon:
          "./assets/images/app-icon.png",
 
@@ -47,14 +46,6 @@ export default {
     plugins: [
       "expo-router",
       "expo-secure-store",
-      [
-        "expo-camera",
-        {
-          cameraPermission: "Allow GyanNidhi to access your camera.",
-          microphonePermission:
-            "Allow GyanNidhi to record premises video.",
-        },
-      ],
 
       [
   "expo-notifications",

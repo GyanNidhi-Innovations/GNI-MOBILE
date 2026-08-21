@@ -20,6 +20,7 @@ import { apiClient } from "@/services/apiClient";
 import AppScreen from "@/components/common/AppScreen";
 import ScreenHeader from "@/components/ui/ScreenHeader";
 import { useResponsive } from "@/hooks/useResponsive";
+
 import { COLORS } from "@/theme";
 
 import NetInfo from "@react-native-community/netinfo";
@@ -308,10 +309,10 @@ useFocusEffect(
 
     router.navigate({
   pathname:
-    "/(protected)/events/[id]",
+    "/event/[id]",
+
   params: {
     id: String(event._id),
-    source: "calendar",
   },
 });
   };

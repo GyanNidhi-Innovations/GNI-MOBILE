@@ -783,7 +783,7 @@ await setAuth({
   refreshToken,
 });
 
-      router.replace("/(protected)/home");
+      router.replace("/home");
     } catch (error) {
       Alert.alert(
         "Registration failed",
