@@ -1180,8 +1180,8 @@ export default function HomeScreen() {
           style={{
             marginBottom:
               isCompactPhone
-                ? 30
-                : 34,
+                ? 20
+                : 24,
           }}
         >
           <SectionHeader
@@ -2244,7 +2244,10 @@ function RecentEventCard({
        */}
       <View
         style={{
-          minHeight: 104,
+          minHeight:
+           isCompactPhone
+        ? 76
+        : 82,
 
           paddingHorizontal:
             12,
@@ -2291,40 +2294,7 @@ function RecentEventCard({
             "Untitled event"}
         </Text>
 
-        <View
-          style={{
-            marginTop: "auto",
-
-            paddingTop: 9,
-
-            flexDirection:
-              "row",
-
-            alignItems:
-              "center",
-          }}
-        >
-          <Text
-            style={{
-              color: "#0F5EFF",
-
-              fontSize: 12,
-
-              fontWeight: "700",
-            }}
-          >
-            View event
-          </Text>
-
-          <Ionicons
-            name="arrow-forward"
-            size={13}
-            color="#0F5EFF"
-            style={{
-              marginLeft: 4,
-            }}
-          />
-        </View>
+        
       </View>
     </Pressable>
   );
