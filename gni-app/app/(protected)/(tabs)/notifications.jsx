@@ -743,7 +743,7 @@ if (success) {
   const renderHeader = () => (
     <ScreenHeader
       title="Alerts"
-      subtitle="Important event updates, reminders, registration notices, and account announcementsâ€”all in one place."
+      subtitle="Important event updates, reminders, registration notices, and account announcements all in one place."
       style={{
         marginBottom:
           isCompactPhone ? 20 : 26,
