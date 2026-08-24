@@ -31,16 +31,20 @@ export default function AppScreen({
         backgroundColor,
       }}
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "undefined"}
-        keyboardVerticalOffset={keyboardOffset}
-      >
-        <ContentWrapper
-          {...(scroll
-            ? {
-                enableOnAndroid: true,
-                refreshControl: onRefresh ? (
+     <KeyboardAvoidingView
+  style={{ flex: 1 }}
+  behavior={
+    Platform.OS === "ios"
+      ? "padding"
+      : undefined
+  }
+  keyboardVerticalOffset={keyboardOffset}
+>
+       <ContentWrapper
+  {...(scroll
+    ? {
+        enableOnAndroid: true,
+        refreshControl: onRefresh ? (
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
@@ -48,29 +52,55 @@ export default function AppScreen({
             tintColor={COLORS.primary}
           />
         ) : undefined,
-                extraScrollHeight: 12,
-                keyboardShouldPersistTaps: "handled",
-                showsVerticalScrollIndicator: false,
-                contentContainerStyle: {
-                  flexGrow: 1,
-                  paddingHorizontal: SPACING.lg,
-                  paddingTop: SPACING.md,
-                  paddingBottom: bottomSpace + insets.bottom,
-                  justifyContent: centered ? "center" : "flex-start",
-                  ...contentStyle,
-                },
-              }
-            : {})}
-          style={!scroll ? { flex: 1 } : undefined}
-        >
-          <View
-            style={{
-              width: "100%",
-              maxWidth,
-              alignSelf: "center",
-              flex: scroll && centered ? 0 : undefined,
-            }}
-          >
+        extraScrollHeight: 12,
+        keyboardShouldPersistTaps:
+          "handled",
+        showsVerticalScrollIndicator:
+          false,
+        contentContainerStyle: {
+          flexGrow: 1,
+          paddingHorizontal: SPACING.lg,
+          paddingTop: SPACING.md,
+          paddingBottom:
+            bottomSpace + insets.bottom,
+          justifyContent:
+            centered
+              ? "center"
+              : "flex-start",
+          ...contentStyle,
+        },
+      }
+    : {})}
+ style={{
+  flex: 1,
+
+  ...(!scroll
+    ? {
+        justifyContent:
+          centered
+            ? "center"
+            : "flex-start",
+      }
+    : {}),
+}}
+>
+  <View
+    style={{
+      width: "100%",
+      maxWidth,
+      alignSelf: "center",
+
+     alignItems:
+  centered
+    ? "center"
+    : undefined,
+
+      flex:
+        scroll && centered
+          ? 0
+          : undefined,
+    }}
+  >
             {children}
           </View>
         </ContentWrapper>
