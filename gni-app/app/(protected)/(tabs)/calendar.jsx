@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -69,8 +68,17 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] =
     useState(null);
 
-    const wasOfflineRef =
+   const hasLoadedOnceRef =
   useRef(false);
+
+const hasSuccessfulLoadRef =
+  useRef(false);
+
+const wasOfflineRef =
+  useRef(false);
+
+const [loadError, setLoadError] =
+  useState(null);
 
   const {
     isCompactPhone,
@@ -84,7 +92,10 @@ const fetchCalendarEvents =
       showLoader = true,
     ) => {
       try {
-        if (showLoader) {
+        if (
+          showLoader &&
+          !hasLoadedOnceRef.current
+        ) {
           setLoading(true);
         }
 
@@ -101,6 +112,19 @@ const fetchCalendarEvents =
             : [],
         );
 
+        /*
+         * A successful server response
+         * means Calendar now has usable
+         * data.
+         */
+        hasLoadedOnceRef.current =
+          true;
+
+        hasSuccessfulLoadRef.current =
+          true;
+
+        setLoadError(null);
+
         return true;
       } catch (error) {
         if (__DEV__) {
@@ -109,6 +133,46 @@ const fetchCalendarEvents =
             error?.message ||
               error,
           );
+        }
+
+        try {
+          const networkState =
+            await NetInfo.fetch();
+
+          const isOffline =
+            networkState
+              .isConnected === false ||
+            networkState
+              .isInternetReachable ===
+              false;
+
+          if (isOffline) {
+            wasOfflineRef.current =
+              true;
+          }
+
+          /*
+           * Only needed for the
+           * first unsuccessful load.
+           *
+           * Existing Calendar data must
+           * never be removed.
+           */
+          if (
+            !hasSuccessfulLoadRef.current
+          ) {
+            setLoadError(
+              isOffline
+                ? "offline"
+                : "error",
+            );
+          }
+        } catch {
+          if (
+            !hasSuccessfulLoadRef.current
+          ) {
+            setLoadError("error");
+          }
         }
 
         return false;
@@ -121,13 +185,18 @@ const fetchCalendarEvents =
     [],
   );
 
-  useEffect(() => {
-  fetchCalendarEvents(true);
-}, [fetchCalendarEvents]);
+useFocusEffect(
+  useCallback(() => {
+    void fetchCalendarEvents(
+      !hasLoadedOnceRef.current,
+    );
+  }, [fetchCalendarEvents]),
+);
 
 useFocusEffect(
   useCallback(() => {
     let reconnectTimer = null;
+    let retryTimer = null;
 
     const unsubscribe =
       NetInfo.addEventListener(
@@ -138,8 +207,7 @@ useFocusEffect(
               false;
 
           if (isOffline) {
-            wasOfflineRef.current =
-              true;
+            wasOfflineRef.current = true;
 
             if (reconnectTimer) {
               clearTimeout(
@@ -147,6 +215,14 @@ useFocusEffect(
               );
 
               reconnectTimer = null;
+            }
+
+            if (retryTimer) {
+              clearTimeout(
+                retryTimer,
+              );
+
+              retryTimer = null;
             }
 
             return;
@@ -159,49 +235,54 @@ useFocusEffect(
 
           if (
             isOnline &&
-            wasOfflineRef.current
+            wasOfflineRef.current &&
+            !reconnectTimer &&
+            !retryTimer
           ) {
-            wasOfflineRef.current =
-              false;
+            reconnectTimer =
+              setTimeout(
+                async () => {
+                  reconnectTimer = null;
 
-            if (reconnectTimer) {
-              clearTimeout(
-                reconnectTimer,
+                  const success =
+                    await fetchCalendarEvents(
+                      false,
+                    );
+
+                  if (success) {
+                    wasOfflineRef.current =
+                      false;
+
+                    return;
+                  }
+
+                  /*
+                   * Android can report
+                   * connectivity before
+                   * requests are usable.
+                   */
+                  retryTimer =
+                    setTimeout(
+                      async () => {
+                        retryTimer = null;
+
+                        const retrySuccess =
+                          await fetchCalendarEvents(
+                            false,
+                          );
+
+                        if (
+                          retrySuccess
+                        ) {
+                          wasOfflineRef.current =
+                            false;
+                        }
+                      },
+                      1500,
+                    );
+                },
+                700,
               );
-            }
-
-            reconnectTimer =
-  setTimeout(
-    async () => {
-      const success =
-        await fetchCalendarEvents(
-          false,
-        );
-
-      reconnectTimer =
-        null;
-
-      /*
-       * Retry once if Android
-       * reports online before the
-       * network is fully usable.
-       */
-      if (!success) {
-        reconnectTimer =
-          setTimeout(() => {
-            void fetchCalendarEvents(
-              false,
-            );
-
-            reconnectTimer =
-              null;
-          }, 1500);
-      }
-    },
-    700,
-  );
-
-
           }
         },
       );
@@ -212,6 +293,12 @@ useFocusEffect(
       if (reconnectTimer) {
         clearTimeout(
           reconnectTimer,
+        );
+      }
+
+      if (retryTimer) {
+        clearTimeout(
+          retryTimer,
         );
       }
 
@@ -330,6 +417,103 @@ useFocusEffect(
       </AppScreen>
     );
   }
+
+  if (
+  loadError &&
+  !hasSuccessfulLoadRef.current
+) {
+  const offline =
+    loadError === "offline";
+
+  return (
+    <AppScreen
+      centered
+      scroll={false}
+    >
+      <View
+        style={{
+          width: 72,
+          height: 72,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 24,
+          backgroundColor: "#F2F4F7",
+        }}
+      >
+        <Ionicons
+          name={
+            offline
+              ? "cloud-offline-outline"
+              : "alert-circle-outline"
+          }
+          size={36}
+          color="#667085"
+        />
+      </View>
+
+      <Text
+        style={{
+          marginTop: 20,
+          color: "#101828",
+          fontSize:
+            type.sectionTitle,
+          fontWeight: "800",
+          textAlign: "center",
+        }}
+      >
+        {offline
+          ? "No internet connection"
+          : "Unable to load Calendar"}
+      </Text>
+
+      <Text
+        style={{
+          maxWidth: 310,
+          marginTop: 8,
+          color: "#667085",
+          fontSize: type.body,
+          lineHeight:
+            type.body + 8,
+          textAlign: "center",
+        }}
+      >
+        {offline
+          ? "Reconnect to the internet and your calendar events will refresh automatically."
+          : "We couldn't load your calendar events right now."}
+      </Text>
+
+      <Pressable
+        onPress={() => {
+          void fetchCalendarEvents(
+            false,
+          );
+        }}
+        style={({ pressed }) => ({
+          minHeight: 48,
+          marginTop: 22,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 14,
+          backgroundColor:
+            "#022670",
+          paddingHorizontal: 24,
+          opacity:
+            pressed ? 0.82 : 1,
+        })}
+      >
+        <Text
+          style={{
+            color: "#FFFFFF",
+            fontSize: type.button,
+            fontWeight: "700",
+          }}
+        >
+          Try Again
+        </Text>
+      </Pressable>
+    </AppScreen>
+  );
+}
 
   return (
     <AppScreen
