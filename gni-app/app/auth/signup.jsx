@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo,useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { Redirect,router } from "expo-router";
 
 import {
   signupUserApi,
@@ -466,12 +466,15 @@ export default function SignupScreen() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  const requestLockedRef = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const setAuth = useAuthStore((state) => state.setAuth);
 
- 
+  const token = useAuthStore((state) => state.token);
+const authLoading = useAuthStore((state) => state.authLoading);
 
   const selectedBranch =
     form.branch === "Others" ? form.customBranch.trim() : form.branch;
@@ -708,10 +711,21 @@ export default function SignupScreen() {
   };
 
   const handleSignup = async () => {
-    if (loading || !validateForm()) return;
+  if (
+    loading ||
+    requestLockedRef.current
+  ) {
+    return;
+  }
 
-    try {
-      setLoading(true);
+  if (!validateForm()) {
+    return;
+  }
+
+  requestLockedRef.current = true;
+
+  try {
+    setLoading(true);
 
       const signupResponse = await signupUserApi(buildPayload());
 
@@ -792,9 +806,18 @@ await setAuth({
           "Unable to create your account",
       );
     } finally {
+      requestLockedRef.current = false;
       setLoading(false);
     }
   };
+
+  if (authLoading) {
+  return null;
+}
+
+if (token) {
+  return <Redirect href="/home" />;
+}
 
   return (
     <AppScreen
@@ -1249,7 +1272,7 @@ await setAuth({
   <Pressable
   disabled={loading}
   onPress={() =>
-    router.navigate(
+    router.replace(
       "/auth/login",
     )
   }
