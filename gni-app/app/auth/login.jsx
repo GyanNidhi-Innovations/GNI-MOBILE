@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   Keyboard,
 } from "react-native";
-import { router } from "expo-router";
+import { Redirect,router } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -52,7 +52,10 @@ const [passwordError, setPasswordError] = useState("");
 
 const [loginError, setLoginError] = useState("");
 
-  const setAuth = useAuthStore((state) => state.setAuth);
+const setAuth = useAuthStore((state) => state.setAuth);
+
+const token = useAuthStore((state) => state.token);
+const authLoading = useAuthStore((state) => state.authLoading);
 
 const handleLogin = async () => {
   if (
@@ -196,6 +199,14 @@ const handleLogin = async () => {
     setLoading(false);
   }
 };
+
+if (authLoading) {
+  return null;
+}
+
+if (token) {
+  return <Redirect href="/home" />;
+}
 
   return (
   <AppScreen
@@ -468,7 +479,7 @@ const handleLogin = async () => {
 
 <Pressable
   disabled={loading}
-  onPress={() => router.navigate("/auth/signup")}
+  onPress={() => router.replace("/auth/signup")}
   style={({ pressed }) => ({
     alignSelf: "center",
     paddingHorizontal: 12,
