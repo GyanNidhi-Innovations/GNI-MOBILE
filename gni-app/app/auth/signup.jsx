@@ -6,9 +6,9 @@ import {
   Alert,
   TextInput,
   ScrollView,
+  Modal,
   ActivityIndicator,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect,router } from "expo-router";
 
@@ -186,11 +186,6 @@ function SectionTitle({ title }) {
     </View>
   );
 }
-
-
-
-
-
 function PickerField({
   label,
   value,
@@ -198,8 +193,29 @@ function PickerField({
   options,
   onValueChange,
   error,
-  mode = "dialog",
 }) {
+  const [open, setOpen] = useState(false);
+
+  const normalizedOptions = options.map((option) =>
+    typeof option === "string"
+      ? {
+          label: option,
+          value: option,
+        }
+      : option,
+  );
+
+  const selectedOption = normalizedOptions.find(
+    (option) => option.value === value,
+  );
+
+  const selectedLabel = selectedOption?.label || "";
+
+ const handleSelect = (selectedValue) => {
+  setOpen(false);
+  onValueChange(selectedValue);
+};
+
   return (
     <View style={{ marginBottom: SPACING.xl }}>
       <Text
@@ -207,55 +223,51 @@ function PickerField({
           marginBottom: SPACING.sm,
           color: "#101828",
           fontSize: 13,
+          lineHeight: 18,
           fontWeight: "600",
         }}
       >
         {label}
       </Text>
 
-      <View
+      {/* Closed select field */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(true)}
         style={{
           minHeight: 56,
-          justifyContent: "center",
-          borderRadius: RADIUS.xl,
+          width: "100%",
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 16,
           borderWidth: 1,
           borderColor: error ? "#D92D20" : "#D0D5DD",
-          backgroundColor: "#F9FAFB",
-          overflow: "hidden",
+          borderRadius: 14,
+          backgroundColor: "#FFFFFF",
+          
         }}
       >
-        <Picker
-          selectedValue={value}
-          onValueChange={onValueChange}
-          mode={mode}
-          dropdownIconColor="#667085"
+        <Text
+          numberOfLines={1}
           style={{
-            height: 56,
-            color: value ? "#101828" : "#667085",
+            flex: 1,
+            color: value ? "#344054" : "#98A2B3",
+            fontSize: 15,
+            lineHeight: 21,
+            fontWeight: value ? "500" : "400",
           }}
         >
-         <Picker.Item
-  label={placeholder}
-  value=""
-    enabled={value === ""}
-/>
+          {selectedLabel || placeholder}
+        </Text>
 
-          {options.map((option) => {
-            const item =
-              typeof option === "string"
-                ? { label: option, value: option }
-                : option;
-
-            return (
-              <Picker.Item
-                key={item.value}
-                label={`   ${item.label}`}
-                value={item.value}
-              />
-            );
-          })}
-        </Picker>
-      </View>
+        <Ionicons
+          name="chevron-down"
+          size={20}
+          color="#667085"
+        />
+      </Pressable>
 
       {error ? (
         <Text
@@ -263,11 +275,181 @@ function PickerField({
             marginTop: SPACING.sm,
             color: "#D92D20",
             fontSize: 12,
+            lineHeight: 18,
           }}
         >
           {error}
         </Text>
       ) : null}
+
+      {/* Selection dialog */}
+      <Modal
+        visible={open}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => setOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(16, 24, 40, 0.48)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 20,
+          }}
+        >
+          {/* Backdrop */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close selection"
+            onPress={() => setOpen(false)}
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+            }}
+          />
+
+          {/* Dialog card */}
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              maxHeight: "72%",
+              backgroundColor: "#FFFFFF",
+              borderRadius: 20,
+              overflow: "hidden",
+              elevation: 12,
+              shadowColor: "#000000",
+              shadowOffset: {
+                width: 0,
+                height: 8,
+              },
+              shadowOpacity: 0.18,
+              shadowRadius: 20,
+            }}
+          >
+            {/* Dialog header */}
+            <View
+              style={{
+                minHeight: 64,
+                paddingLeft: 20,
+                paddingRight: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                borderBottomWidth: 1,
+                borderBottomColor: "#EAECF0",
+              }}
+            >
+              <Text
+                style={{
+                  flex: 1,
+                  color: "#101828",
+                  fontSize: 17,
+                  lineHeight: 24,
+                  fontWeight: "700",
+                }}
+              >
+                {label}
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={10}
+                onPress={() => setOpen(false)}
+                style={{
+                  width: 40,
+                  height: 40,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 20,
+                  backgroundColor: "#F2F4F7",
+                }}
+              >
+                <Ionicons
+                  name="close"
+                  size={23}
+                  color="#475467"
+                />
+              </Pressable>
+            </View>
+
+            {/* Options */}
+            <ScrollView
+              showsVerticalScrollIndicator
+              style={{ flexShrink: 1 }}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{
+                paddingVertical: 12,
+              }}
+            >
+              {normalizedOptions.map((option, index) => {
+                const selected = option.value === value;
+
+                return (
+                  <Pressable
+                    key={`${option.value}-${index}`}
+                    accessibilityRole="radio"
+                    accessibilityState={{
+                      checked: selected,
+                    }}
+                    onPress={() => handleSelect(option.value)}
+                    style={{
+                      minHeight: 58,
+                      paddingVertical: 16,
+                      borderBottomWidth: 1,
+                      borderBottomColor: selected ? "#DBE7FF" : "#EEF0F4",
+                      borderLeftWidth: 3,
+                      borderLeftColor: selected ? "transparent" : "transparent",
+                      marginHorizontal: 12,
+                      marginVertical: 3,
+                      paddingHorizontal: 16,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 12,
+                      backgroundColor: selected
+                        ? "#F0F5FF"
+                        : "#FFFFFF",
+                    }}
+                  >
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        flex: 1,
+                        color: selected
+                          ? "#022670"
+                          : "#344054",
+                        fontSize: 15,
+                        lineHeight: 21,
+                        fontWeight: selected
+                          ? "600"
+                          : "500",
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+
+                    {selected ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={22}
+                        color="#0F5EFF"
+                        style={{
+                          marginLeft: 16,
+                        }}
+                      />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -286,7 +468,7 @@ function CollegeSearchField({ value, onChange, error }) {
 
   const handleTextChange = (text) => {
     // Same basic restriction as the website form.
-    const cleaned = text.replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ");
+    const cleaned = text.replace(/\s+/g, " ");
     onChange(cleaned);
     setOpen(true);
   };
@@ -366,30 +548,34 @@ function CollegeSearchField({ value, onChange, error }) {
         showsVerticalScrollIndicator
         persistentScrollbar
         keyboardShouldPersistTaps="handled"
-        fadingEdgeLength={24}
+
         contentContainerStyle={{
           paddingVertical: SPACING.sm,
+          paddingHorizontal: 12,
         }}
       >
         {filteredColleges.map((college, index) => (
   <View key={`${college}-${index}`}>
     <Pressable
-      onPress={() => {
-        onChange(college);
-        setOpen(false);
-      }}
-      style={({ pressed }) => ({
-        marginHorizontal: SPACING.sm,
-        paddingHorizontal: SPACING.lg,
-        paddingVertical: 14,
-        borderRadius: RADIUS.md,
-        borderWidth: 1,
-        borderColor: "#EAECF0",
-        backgroundColor: pressed
-          ? "#EFF4FF"
-          : "#FFFFFF",
-      })}
-    >
+  onPress={() => {
+    onChange(college);
+    setOpen(false);
+  }}
+  android_ripple={{
+    color: "#F2F4F7",
+  }}
+  style={{
+    width: "100%",
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: "#EAECF0",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+  }}
+>
       <Text
         style={{
           color: "#344054",
@@ -493,18 +679,32 @@ const authLoading = useAuthStore((state) => state.authLoading);
     clearError(key);
   };
 
-  const handleTypeChange = (type) => {
-    setForm((previous) => ({
-      ...INITIAL_FORM,
-      type,
-      name: previous.name,
-      email: previous.email,
-      phone: previous.phone,
-      password: previous.password,
-      confirmPassword: previous.confirmPassword,
-    }));
-    setErrors({});
-  };
+ const handleTypeChange = (type) => {
+  setForm((previous) => ({
+    ...previous,
+
+    // change selected account type
+    type,
+
+    // clear Student fields
+    college: "",
+    year: "",
+    joiningyear: "",
+    branch: "",
+    customBranch: "",
+
+    // clear Fresher fields
+    degree: "",
+    passoutYear: "",
+
+    // clear Working Professional fields
+    currentCompany: "",
+    currentRole: "",
+    experience: "",
+  }));
+
+  setErrors({});
+};
 
   const handleNameChange = (value) => {
     const cleaned = value
@@ -538,20 +738,13 @@ const authLoading = useAuthStore((state) => state.authLoading);
   };
 
   const handleSkillsChange = (value) => {
-    const containsNumber = /[0-9]/.test(value);
-    const cleaned = value.replace(/[0-9]/g, "");
+  setForm((previous) => ({
+    ...previous,
+    skills: value,
+  }));
 
-    setForm((previous) => ({ ...previous, skills: cleaned }));
-
-    if (containsNumber) {
-      setErrors((previous) => ({
-        ...previous,
-        skills: "Numbers are not allowed in skills or interests",
-      }));
-    } else {
-      clearError("skills");
-    }
-  };
+  clearError("skills");
+};
 
   const getPasswordErrors = (password) => {
     const problems = [];
@@ -821,6 +1014,7 @@ if (token) {
 
   return (
     <AppScreen
+     keyboardAware={false}
       bottomSpace={48}
       contentStyle={{ paddingTop: SPACING.xl }}
       maxWidth={560}
