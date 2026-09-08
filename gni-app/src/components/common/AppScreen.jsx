@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, View,  RefreshControl, } from "react-native";
+import { KeyboardAvoidingView, Platform, View,  RefreshControl,ScrollView, } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -7,9 +7,11 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 
 import { COLORS, SPACING } from "../../theme";
 
+
 export default function AppScreen({
   children,
   scroll = true,
+  keyboardAware = true,
   backgroundColor = COLORS.background,
   contentStyle = {},
   keyboardOffset = 0,
@@ -21,7 +23,12 @@ export default function AppScreen({
 }) {
   const insets = useSafeAreaInsets();
 
-  const ContentWrapper = scroll ? KeyboardAwareScrollView : View;
+const ContentWrapper =
+  scroll
+    ? keyboardAware
+      ? KeyboardAwareScrollView
+      : ScrollView
+    : View;
 
   return (
     <SafeAreaView
@@ -36,14 +43,21 @@ export default function AppScreen({
   behavior={
     Platform.OS === "ios"
       ? "padding"
-      : undefined
+      : "height"
   }
   keyboardVerticalOffset={keyboardOffset}
 >
        <ContentWrapper
   {...(scroll
     ? {
-        enableOnAndroid: true,
+
+      ...(keyboardAware
+        ? {
+            enableOnAndroid:true,
+            extraScrollHeight:12,
+          }
+        : {}),
+
         refreshControl: onRefresh ? (
           <RefreshControl
             refreshing={refreshing}
@@ -52,7 +66,6 @@ export default function AppScreen({
             tintColor={COLORS.primary}
           />
         ) : undefined,
-        extraScrollHeight: 12,
         keyboardShouldPersistTaps:
           "handled",
         showsVerticalScrollIndicator:
